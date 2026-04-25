@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "714792558226",
+    "project_id": "next-hire-62f3f",
+    "storage_bucket": "next-hire-62f3f.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:714792558226:android:95d4b4ea06eeae36a0104b",
+        "android_client_info": {
+          "package_name": "com.example.next_hire"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBK_lJD7zgUI_GN_19Onn8QPD_2EtEnIeU"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
