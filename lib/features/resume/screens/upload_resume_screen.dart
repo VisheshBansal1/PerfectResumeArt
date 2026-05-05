@@ -1,4 +1,6 @@
 import 'dart:io';
+import 'dart:typed_data';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -380,6 +382,8 @@ class _UploadResumeScreenState extends ConsumerState<UploadResumeScreen>
 
   File? _selectedFile;
   String? _fileType;
+  Uint8List? _selectedBytes; // web only
+  String? _selectedFileName; // web only
 
   /// Which tab index triggered the last error (so errors don't bleed across tabs)
   int? _errorFromTabIndex;
@@ -437,12 +441,12 @@ class _UploadResumeScreenState extends ConsumerState<UploadResumeScreen>
       final result = await FilePicker.platform.pickFiles(
         type: FileType.custom,
         allowedExtensions: ['pdf', 'jpg', 'jpeg', 'png'],
+        withData: kIsWeb, // on web we need bytes, not path
       );
 
-      if (result == null || result.files.single.path == null) return;
-
-      final pickedPath = result.files.single.path!;
-      final extension = result.files.single.extension?.toLowerCase() ?? '';
+      if (result == null) return;
+      final picked = result.files.single;
+      final extension = (picked.extension ?? '').toLowerCase();
 
       // ── Validate file type ──────────────────────────────────
       const supported = ['pdf', 'jpg', 'jpeg', 'png'];
@@ -454,46 +458,67 @@ class _UploadResumeScreenState extends ConsumerState<UploadResumeScreen>
         return;
       }
 
-      final file = File(pickedPath);
+      if (kIsWeb) {
+        // ── Web: use bytes ────────────────────────────────────
+        final bytes = picked.bytes;
+        if (bytes == null || bytes.isEmpty) {
+          _showError('Could not read the file. Please try again.');
+          return;
+        }
+        if (bytes.length > 10 * 1024 * 1024) {
+          _showError(
+            'File is too large (max 10 MB). Please use a smaller file.',
+          );
+          return;
+        }
+        setState(() {
+          _selectedBytes = Uint8List.fromList(bytes);
+          _selectedFileName = picked.name;
+          _fileType = extension;
+          _selectedFile = null;
+          _errorFromTabIndex = null;
+        });
+        ref.read(resumeUploadProvider.notifier).clearError();
+        await ref
+            .read(resumeUploadProvider.notifier)
+            .extractTextFromBytes(bytes: _selectedBytes!, extension: extension);
+      } else {
+        // ── Mobile/Desktop: use File path ─────────────────────
+        if (picked.path == null) return;
+        final file = File(picked.path!);
 
-      // ── Validate file exists ────────────────────────────────
-      if (!await file.exists()) {
-        _showError('File not found. Please try selecting it again.');
-        return;
+        if (!await file.exists()) {
+          _showError('File not found. Please try selecting it again.');
+          return;
+        }
+        final fileSize = await file.length();
+        if (fileSize == 0) {
+          _showError('The selected file appears to be empty.');
+          return;
+        }
+        if (fileSize > 10 * 1024 * 1024) {
+          _showError(
+            'File is too large (max 10 MB). Please compress or choose a smaller file.',
+          );
+          return;
+        }
+        setState(() {
+          _selectedFile = file;
+          _fileType = extension;
+          _selectedBytes = null;
+          _selectedFileName = null;
+          _errorFromTabIndex = null;
+        });
+        ref.read(resumeUploadProvider.notifier).clearError();
+        await ref.read(resumeUploadProvider.notifier).extractText(file);
       }
-
-      // ── Validate file size ──────────────────────────────────
-      final fileSize = await file.length();
-      if (fileSize == 0) {
-        _showError(
-          'The selected file appears to be empty. Please choose a different file.',
-        );
-        return;
-      }
-      if (fileSize > 10 * 1024 * 1024) {
-        // 10 MB limit
-        _showError(
-          'File is too large (max 10 MB). Please compress or choose a smaller file.',
-        );
-        return;
-      }
-
-      // ── All checks passed — proceed ─────────────────────────
-      setState(() {
-        _selectedFile = file;
-        _fileType = extension;
-        _errorFromTabIndex = null;
-      });
-      ref.read(resumeUploadProvider.notifier).clearError();
-      await ref.read(resumeUploadProvider.notifier).extractText(file);
     } catch (e) {
-      // Catches FilePicker errors and any unexpected exceptions
       _showError('Could not open the file. Please try a different file.');
     }
   }
 
   Future<void> _analyzeJobRole() async {
-    if (_selectedFile == null) {
+    if (_selectedFile == null && _selectedBytes == null) {
       _showError('Please select a resume file first.');
       return;
     }
@@ -502,9 +527,21 @@ class _UploadResumeScreenState extends ConsumerState<UploadResumeScreen>
       return;
     }
     setState(() => _errorFromTabIndex = 0);
-    final analysisId = await ref
-        .read(resumeUploadProvider.notifier)
-        .uploadAndAnalyze(file: _selectedFile!, selectedJob: _selectedJob!);
+    String? analysisId;
+    if (kIsWeb && _selectedBytes != null) {
+      analysisId = await ref
+          .read(resumeUploadProvider.notifier)
+          .uploadAndAnalyzeFromBytes(
+            bytes: _selectedBytes!,
+            fileName: _selectedFileName ?? 'resume',
+            extension: _fileType ?? 'pdf',
+            selectedJob: _selectedJob!,
+          );
+    } else if (_selectedFile != null) {
+      analysisId = await ref
+          .read(resumeUploadProvider.notifier)
+          .uploadAndAnalyze(file: _selectedFile!, selectedJob: _selectedJob!);
+    }
     if (analysisId != null && mounted) {
       ref.invalidate(userAnalysesProvider);
       context.go(AppRoutes.analysisResultWithId(analysisId));
@@ -512,7 +549,7 @@ class _UploadResumeScreenState extends ConsumerState<UploadResumeScreen>
   }
 
   Future<void> _analyzeCustomTech() async {
-    if (_selectedFile == null) {
+    if (_selectedFile == null && _selectedBytes == null) {
       _showError('Please select a resume file first.');
       return;
     }
@@ -525,14 +562,28 @@ class _UploadResumeScreenState extends ConsumerState<UploadResumeScreen>
       return;
     }
     setState(() => _errorFromTabIndex = 1);
-    final analysisId = await ref
-        .read(resumeUploadProvider.notifier)
-        .uploadAndAnalyzeCustom(
-          file: _selectedFile!,
-          jobTitle: _customTitleCtrl.text.trim(),
-          requiredSkills: List.from(_customSkills),
-          description: _customDescCtrl.text.trim(),
-        );
+    String? analysisId;
+    if (kIsWeb && _selectedBytes != null) {
+      analysisId = await ref
+          .read(resumeUploadProvider.notifier)
+          .uploadAndAnalyzeCustomFromBytes(
+            bytes: _selectedBytes!,
+            fileName: _selectedFileName ?? 'resume',
+            extension: _fileType ?? 'pdf',
+            jobTitle: _customTitleCtrl.text.trim(),
+            requiredSkills: List.from(_customSkills),
+            description: _customDescCtrl.text.trim(),
+          );
+    } else if (_selectedFile != null) {
+      analysisId = await ref
+          .read(resumeUploadProvider.notifier)
+          .uploadAndAnalyzeCustom(
+            file: _selectedFile!,
+            jobTitle: _customTitleCtrl.text.trim(),
+            requiredSkills: List.from(_customSkills),
+            description: _customDescCtrl.text.trim(),
+          );
+    }
     if (analysisId != null && mounted) {
       ref.invalidate(userAnalysesProvider);
       context.go(AppRoutes.analysisResultWithId(analysisId));
@@ -621,7 +672,8 @@ class _UploadResumeScreenState extends ConsumerState<UploadResumeScreen>
           ),
           const SizedBox(height: 12),
           _buildFileDropZone(color: AppTheme.primary),
-          if (_selectedFile != null) _buildFilePreview(uploadState),
+          if (_selectedFile != null || _selectedBytes != null)
+            _buildFilePreview(uploadState),
           const SizedBox(height: 24),
           _buildStepHeader(
             2,
@@ -679,7 +731,8 @@ class _UploadResumeScreenState extends ConsumerState<UploadResumeScreen>
           ),
           const SizedBox(height: 12),
           _buildFileDropZone(color: AppTheme.accent),
-          if (_selectedFile != null) _buildFilePreview(uploadState),
+          if (_selectedFile != null || _selectedBytes != null)
+            _buildFilePreview(uploadState),
           const SizedBox(height: 24),
           _buildStepHeader(
             2,
@@ -838,7 +891,7 @@ class _UploadResumeScreenState extends ConsumerState<UploadResumeScreen>
             const SizedBox(height: 8),
             Text(
               'Add the technologies you want to check against (e.g. React, Node.js, PostgreSQL)',
-              style: TextStyle(fontSize: 12, color: Colors.grey[500]),
+              style: TextStyle(fontSize: 12, color: AppTheme.textSecondary),
             ),
           ],
 
@@ -1063,7 +1116,7 @@ class _UploadResumeScreenState extends ConsumerState<UploadResumeScreen>
           ),
           Text(
             subtitle,
-            style: TextStyle(fontSize: 12, color: Colors.grey[500]),
+            style: TextStyle(fontSize: 12, color: AppTheme.textSecondary),
           ),
         ],
       ),
@@ -1104,7 +1157,7 @@ class _UploadResumeScreenState extends ConsumerState<UploadResumeScreen>
             const SizedBox(height: 4),
             Text(
               'Supports PDF, JPG, PNG',
-              style: TextStyle(fontSize: 12, color: Colors.grey[500]),
+              style: TextStyle(fontSize: 12, color: AppTheme.textSecondary),
             ),
           ],
         ),
@@ -1135,7 +1188,9 @@ class _UploadResumeScreenState extends ConsumerState<UploadResumeScreen>
             const SizedBox(width: 8),
             Expanded(
               child: Text(
-                _selectedFile!.path.split('/').last,
+                _selectedFileName ??
+                    _selectedFile?.path.split('/').last ??
+                    'resume',
                 style: const TextStyle(
                   fontWeight: FontWeight.w500,
                   fontSize: 13,
@@ -1147,6 +1202,8 @@ class _UploadResumeScreenState extends ConsumerState<UploadResumeScreen>
               onTap: () {
                 setState(() {
                   _selectedFile = null;
+                  _selectedBytes = null;
+                  _selectedFileName = null;
                   _fileType = null;
                   _errorFromTabIndex = null;
                 });
@@ -1154,7 +1211,11 @@ class _UploadResumeScreenState extends ConsumerState<UploadResumeScreen>
               },
               child: Padding(
                 padding: const EdgeInsets.only(left: 4),
-                child: Icon(Icons.close, size: 18, color: Colors.grey[400]),
+                child: Icon(
+                  Icons.close,
+                  size: 18,
+                  color: AppTheme.textSecondary,
+                ),
               ),
             ),
           ],
@@ -1172,7 +1233,7 @@ class _UploadResumeScreenState extends ConsumerState<UploadResumeScreen>
           const SizedBox(height: 5),
           Text(
             'Extracting text…',
-            style: TextStyle(fontSize: 12, color: Colors.grey[500]),
+            style: TextStyle(fontSize: 12, color: AppTheme.textSecondary),
           ),
         ] else if (uploadState.extractedText != null) ...[
           const SizedBox(height: 6),
@@ -1218,7 +1279,9 @@ class _UploadResumeScreenState extends ConsumerState<UploadResumeScreen>
           children: [
             Icon(
               Icons.work_outline,
-              color: _selectedJob == null ? AppTheme.warning : Colors.grey[400],
+              color: _selectedJob == null
+                  ? AppTheme.warning
+                  : AppTheme.textSecondary,
               size: 20,
             ),
             const SizedBox(width: 12),
@@ -1236,7 +1299,7 @@ class _UploadResumeScreenState extends ConsumerState<UploadResumeScreen>
                 ),
               ),
             ),
-            Icon(Icons.chevron_right, color: Colors.grey[400]),
+            Icon(Icons.chevron_right, color: AppTheme.textSecondary),
           ],
         ),
       ),
@@ -1258,7 +1321,7 @@ class _UploadResumeScreenState extends ConsumerState<UploadResumeScreen>
             Icon(
               Icons.checklist_rtl_outlined,
               size: 13,
-              color: Colors.grey[600],
+              color: AppTheme.textSecondary,
             ),
             const SizedBox(width: 5),
             Text(
@@ -1266,7 +1329,7 @@ class _UploadResumeScreenState extends ConsumerState<UploadResumeScreen>
               style: TextStyle(
                 fontSize: 11,
                 fontWeight: FontWeight.w600,
-                color: Colors.grey[600],
+                color: AppTheme.textSecondary,
               ),
             ),
             if (_selectedJob!.minExperience > 0) ...[
@@ -1321,7 +1384,7 @@ class _UploadResumeScreenState extends ConsumerState<UploadResumeScreen>
           const SizedBox(height: 4),
           Text(
             '+${_selectedJob!.requiredSkills.length - 8} more required skills',
-            style: TextStyle(fontSize: 11, color: Colors.grey[500]),
+            style: TextStyle(fontSize: 11, color: AppTheme.textSecondary),
           ),
         ],
       ],
@@ -1356,12 +1419,17 @@ class _UploadResumeScreenState extends ConsumerState<UploadResumeScreen>
     required Color tabColor,
   }) {
     final bool canAnalyze;
+    final bool hasFile = _selectedFile != null || _selectedBytes != null;
+    // Text must be extracted before analysis — prevents generic AI output on empty text
+    final bool hasText =
+        uploadState.extractedText != null &&
+        uploadState.extractedText!.trim().length > 50;
     if (tabIndex == 0) {
-      canAnalyze = _selectedFile != null && _selectedJob != null;
+      canAnalyze = hasFile && hasText && _selectedJob != null;
     } else {
-      // Reactive check — works because _customTitleCtrl has a setState listener
       canAnalyze =
-          _selectedFile != null &&
+          hasFile &&
+          hasText &&
           _customTitleCtrl.text.trim().isNotEmpty &&
           _customSkills.isNotEmpty;
     }
@@ -1413,7 +1481,7 @@ class _UploadResumeScreenState extends ConsumerState<UploadResumeScreen>
           child: Icon(Icons.error_outline, color: AppTheme.error, size: 16),
         ),
         const SizedBox(width: 8),
-        Expanded( 
+        Expanded(
           child: Text(
             error,
             style: TextStyle(color: AppTheme.error, fontSize: 13),

@@ -3,6 +3,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter_riverpod/legacy.dart';
 import 'package:path/path.dart' as path;
+import 'dart:typed_data';
+import 'package:flutter/foundation.dart' show kIsWeb;
 
 import '../core/services/firebase_service.dart';
 import '../core/services/ocr_service.dart';
@@ -360,6 +362,159 @@ class ResumeUploadNotifier extends StateNotifier<ResumeUploadState> {
     }
   }
 
+  // ── Web-safe bytes-based variants ────────────────────────────────────────
+
+  Future<void> extractTextFromBytes({
+    required Uint8List bytes,
+    required String extension,
+  }) async {
+    state = state.copyWith(isExtracting: true, error: null);
+    try {
+      final result = await _ocrService.extractTextFromBytes(
+        bytes: bytes,
+        extension: extension,
+      );
+      state = state.copyWith(isExtracting: false, extractedText: result.text);
+    } catch (e) {
+      state = state.copyWith(isExtracting: false, error: e.toString());
+    }
+  }
+
+  Future<String?> uploadAndAnalyzeFromBytes({
+    required Uint8List bytes,
+    required String fileName,
+    required String extension,
+    required JobModel selectedJob,
+  }) async {
+    final uid = FirebaseAuth.instance.currentUser?.uid;
+    if (uid == null) return null;
+    try {
+      state = state.copyWith(isExtracting: true, error: null);
+      final ocrResult = await _ocrService.extractTextFromBytes(
+        bytes: bytes,
+        extension: extension,
+      );
+      state = state.copyWith(
+        isExtracting: false,
+        extractedText: ocrResult.text,
+      );
+      final resume = await _firebaseService.saveResumeMetadata(
+        userId: uid,
+        fileName: fileName,
+        fileType: extension == 'pdf' ? 'pdf' : 'image',
+        extractedText: ocrResult.text,
+      );
+      state = state.copyWith(uploadedResumeId: resume.id, isAnalyzing: true);
+      final analysis = await _aiService.analyzeResume(
+        resumeText: ocrResult.text,
+        job: selectedJob,
+        userId: uid,
+        resumeId: resume.id,
+        analysisType: 'full',
+      );
+      final analysisId = await _firebaseService.saveAnalysis(analysis);
+      state = state.copyWith(isAnalyzing: false, analysisId: analysisId);
+      return analysisId;
+    } catch (e) {
+      state = state.copyWith(
+        isExtracting: false,
+        isAnalyzing: false,
+        error: e.toString(),
+      );
+      return null;
+    }
+  }
+
+  Future<String?> uploadAndAnalyzeAtsFromBytes({
+    required Uint8List bytes,
+    required String fileName,
+    required String extension,
+  }) async {
+    final uid = FirebaseAuth.instance.currentUser?.uid;
+    if (uid == null) return null;
+    try {
+      state = state.copyWith(isExtracting: true, error: null);
+      final ocrResult = await _ocrService.extractTextFromBytes(
+        bytes: bytes,
+        extension: extension,
+      );
+      state = state.copyWith(
+        isExtracting: false,
+        extractedText: ocrResult.text,
+      );
+      final resume = await _firebaseService.saveResumeMetadata(
+        userId: uid,
+        fileName: fileName,
+        fileType: extension == 'pdf' ? 'pdf' : 'image',
+        extractedText: ocrResult.text,
+      );
+      state = state.copyWith(uploadedResumeId: resume.id, isAnalyzing: true);
+      final analysis = await _aiService.analyzeAtsOnly(
+        resumeText: ocrResult.text,
+        userId: uid,
+        resumeId: resume.id,
+      );
+      final analysisId = await _firebaseService.saveAnalysis(analysis);
+      state = state.copyWith(isAnalyzing: false, analysisId: analysisId);
+      return analysisId;
+    } catch (e) {
+      state = state.copyWith(
+        isExtracting: false,
+        isAnalyzing: false,
+        error: e.toString(),
+      );
+      return null;
+    }
+  }
+
+  Future<String?> uploadAndAnalyzeCustomFromBytes({
+    required Uint8List bytes,
+    required String fileName,
+    required String extension,
+    required String jobTitle,
+    required List<String> requiredSkills,
+    required String description,
+  }) async {
+    final uid = FirebaseAuth.instance.currentUser?.uid;
+    if (uid == null) return null;
+    try {
+      state = state.copyWith(isExtracting: true, error: null);
+      final ocrResult = await _ocrService.extractTextFromBytes(
+        bytes: bytes,
+        extension: extension,
+      );
+      state = state.copyWith(
+        isExtracting: false,
+        extractedText: ocrResult.text,
+      );
+      final resume = await _firebaseService.saveResumeMetadata(
+        userId: uid,
+        fileName: fileName,
+        fileType: extension == 'pdf' ? 'pdf' : 'image',
+        extractedText: ocrResult.text,
+      );
+      state = state.copyWith(uploadedResumeId: resume.id, isAnalyzing: true);
+      final analysis = await _aiService.analyzeWithCustomTech(
+        resumeText: ocrResult.text,
+        jobTitle: jobTitle,
+        requiredSkills: requiredSkills,
+        description: description,
+        userId: uid,
+        resumeId: resume.id,
+      );
+      final analysisId = await _firebaseService.saveAnalysis(analysis);
+      state = state.copyWith(isAnalyzing: false, analysisId: analysisId);
+      return analysisId;
+    } catch (e) {
+      state = state.copyWith(
+        isExtracting: false,
+        isAnalyzing: false,
+        error: e.toString(),
+      );
+      return null;
+    }
+  }
+
   void reset() => state = const ResumeUploadState();
   void clearError() => state = state.copyWith(error: null);
 }
@@ -371,6 +526,23 @@ final analysisProvider = FutureProvider.family<AnalysisModel?, String>((
 ) async {
   final service = ref.read(firebaseServiceProvider);
   return service.getAnalysis(id);
+});
+
+/// Fetches a single ResumeModel by its Firestore document ID.
+final resumeByIdProvider = FutureProvider.family<ResumeModel?, String>((
+  ref,
+  id,
+) async {
+  if (id.isEmpty) return null;
+  final uid = FirebaseAuth.instance.currentUser?.uid;
+  if (uid == null) return null;
+  final service = ref.read(firebaseServiceProvider);
+  final resumes = await service.getUserResumes(uid);
+  try {
+    return resumes.firstWhere((r) => r.id == id);
+  } catch (_) {
+    return null;
+  }
 });
 
 final userAnalysesProvider = FutureProvider<List<AnalysisModel>>((ref) async {

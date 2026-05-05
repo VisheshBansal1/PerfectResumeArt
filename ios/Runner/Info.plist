@@ -26,6 +26,75 @@
 	<string>$(FLUTTER_BUILD_NUMBER)</string>
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
+
+	<!-- ── Razorpay: allow opening UPI / payment apps ─────────── -->
+	<key>LSApplicationQueriesSchemes</key>
+	<array>
+		<string>upi</string>
+		<string>phonepe</string>
+		<string>gpay</string>
+		<string>paytmmp</string>
+		<string>bhim</string>
+		<string>credpay</string>
+		<string>rzp</string>
+	</array>
+
+	<!-- ── Razorpay: register its URL scheme for redirect back ── -->
+	<key>CFBundleURLTypes</key>
+	<array>
+		<dict>
+			<key>CFBundleTypeRole</key>
+			<string>Editor</string>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>rzp-$(PRODUCT_BUNDLE_IDENTIFIER)</string>
+			</array>
+		</dict>
+	</array>
+
+	<!-- ── Camera (for resume photo scanning) ────────────────── -->
+	<key>NSCameraUsageDescription</key>
+	<string>Camera is used to scan or photograph your resume document.</string>
+
+	<!-- ── Photo Library (for picking resume images) ─────────── -->
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>Photo library access is used to pick your resume image or PDF.</string>
+
+	<!-- ── Photo Library Add (for saving generated PDF) ─────── -->
+	<key>NSPhotoLibraryAddUsageDescription</key>
+	<string>Used to save your improved resume PDF to your photo library.</string>
+
+	<!-- ── File sharing: allow users to open PDFs in Files app ─ -->
+	<key>UIFileSharingEnabled</key>
+	<true/>
+	<key>LSSupportsOpeningDocumentsInPlace</key>
+	<true/>
+
+	<!-- ── App Transport Security (allow Groq + Razorpay HTTPS) ─ -->
+	<key>NSAppTransportSecurity</key>
+	<dict>
+		<key>NSAllowsArbitraryLoads</key>
+		<false/>
+		<key>NSExceptionDomains</key>
+		<dict>
+			<key>api.groq.com</key>
+			<dict>
+				<key>NSExceptionAllowsInsecureHTTPLoads</key>
+				<false/>
+				<key>NSIncludesSubdomains</key>
+				<true/>
+			</dict>
+			<key>api.razorpay.com</key>
+			<dict>
+				<key>NSExceptionAllowsInsecureHTTPLoads</key>
+				<false/>
+				<key>NSIncludesSubdomains</key>
+				<true/>
+			</dict>
+		</dict>
+	</dict>
+
+	<!-- ── Scene / Window configuration ─────────────────────── -->
 	<key>UIApplicationSceneManifest</key>
 	<dict>
 		<key>UIApplicationSupportsMultipleScenes</key>
@@ -47,6 +116,7 @@
 			</array>
 		</dict>
 	</dict>
+
 	<key>UIApplicationSupportsIndirectInputEvents</key>
 	<true/>
 	<key>UILaunchStoryboardName</key>

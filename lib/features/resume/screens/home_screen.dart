@@ -10,6 +10,7 @@ import '../../auth/providers/auth_provider.dart';
 import '../../../providers/providers.dart';
 import '../../../models/models.dart';
 import '../../../core/constants/app_constants.dart';
+import '../../premium/screens/premium_hub_screen.dart';
 
 class HomeScreen extends ConsumerWidget {
   const HomeScreen({super.key});
@@ -99,7 +100,7 @@ class HomeScreen extends ConsumerWidget {
                     child: Icon(
                       Icons.refresh,
                       size: 18,
-                      color: Colors.grey[500],
+                      color: AppTheme.textSecondary,
                     ),
                   ),
                 ],
@@ -143,7 +144,7 @@ class HomeScreen extends ConsumerWidget {
       const SizedBox(height: 4),
       Text(
         'Let\'s improve your resume today',
-        style: TextStyle(fontSize: 14, color: Colors.grey[600]),
+        style: TextStyle(fontSize: 14, color: AppTheme.textSecondary),
       ),
     ],
   );
@@ -231,6 +232,55 @@ class HomeScreen extends ConsumerWidget {
         color: AppTheme.accent,
         onTap: () => context.push(AppRoutes.uploadResume, extra: 'custom'),
       ),
+      const SizedBox(height: 12),
+      // Premium banner card
+      GestureDetector(
+        onTap: () => Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (_) => const PremiumHubScreen(resumeText: ''),
+          ),
+        ),
+        child: Container(
+          padding: const EdgeInsets.all(14),
+          decoration: BoxDecoration(
+            gradient: const LinearGradient(
+              colors: [Color(0xFF0A0E1A), Color(0xFF1A1D27)],
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+            ),
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(color: const Color(0xFF2D5BE3).withOpacity(0.4)),
+          ),
+          child: Row(children: [
+            const Text('🚀', style: TextStyle(fontSize: 26)),
+            const SizedBox(width: 12),
+            const Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text('Premium Resume Tools',
+                      style: TextStyle(color: Colors.white, fontWeight: FontWeight.w700, fontSize: 14)),
+                  SizedBox(height: 2),
+                  Text('Fix · JD Match · Why Rejected · PDF · Expert Review',
+                      style: TextStyle(color: Colors.white54, fontSize: 11)),
+                ],
+              ),
+            ),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+              decoration: BoxDecoration(
+                color: const Color(0xFFFF6B35).withOpacity(0.2),
+                borderRadius: BorderRadius.circular(6),
+              ),
+              child: const Text('from ₹39',
+                  style: TextStyle(color: Color(0xFFFF6B35), fontSize: 11, fontWeight: FontWeight.w700)),
+            ),
+            const SizedBox(width: 6),
+            const Icon(Icons.arrow_forward_ios, size: 13, color: Colors.white30),
+          ]),
+        ),
+      ),
     ],
   );
 
@@ -254,7 +304,7 @@ class HomeScreen extends ConsumerWidget {
         Text(
           'Upload your resume to get AI-powered\nfeedback and match scores.',
           textAlign: TextAlign.center,
-          style: TextStyle(fontSize: 13, color: Colors.grey[500], height: 1.5),
+          style: TextStyle(fontSize: 13, color: AppTheme.textSecondary, height: 1.5),
         ),
         const SizedBox(height: 20),
         ElevatedButton.icon(
@@ -360,7 +410,7 @@ class _ToolCard extends StatelessWidget {
           // FIX: maxLines prevents subtitle from causing pixel overflow in narrow cards
           Text(
             subtitle,
-            style: TextStyle(fontSize: 11, color: Colors.grey[600]),
+            style: TextStyle(fontSize: 11, color: AppTheme.textSecondary),
             maxLines: 2,
             overflow: TextOverflow.ellipsis,
           ),
@@ -423,7 +473,7 @@ class _ToolCardWide extends StatelessWidget {
                 const SizedBox(height: 3),
                 Text(
                   subtitle,
-                  style: TextStyle(fontSize: 12, color: Colors.grey[600]),
+                  style: TextStyle(fontSize: 12, color: AppTheme.textSecondary),
                   maxLines: 2,
                   overflow: TextOverflow.ellipsis,
                 ),
@@ -531,7 +581,7 @@ class _AnalysisCard extends StatelessWidget {
                   const SizedBox(height: 3),
                   Text(
                     DateFormat('MMM d, yyyy').format(analysis.analyzedAt),
-                    style: TextStyle(fontSize: 12, color: Colors.grey[500]),
+                    style: TextStyle(fontSize: 12, color: AppTheme.textSecondary),
                   ),
                   const SizedBox(height: 6),
                   // FIX: Wrap prevents score pills from overflowing on narrow screens

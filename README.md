@@ -894,7 +894,7 @@ flutterfire configure --project=your-firebase-project-id
 flutter run
 
 # For release build
-flutter build apk --release
+flutter build apk 
 ```
 
 ---
