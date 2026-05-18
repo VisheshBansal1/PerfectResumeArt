@@ -3,7 +3,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter_riverpod/legacy.dart';
 
-import '../core/services/resume_improve_service.dart';
+import '../core/services/resume_improve_service.dart'; // GeneratedResume, ExperienceEntry, ProjectEntry
 import '../core/services/resume_pdf_service.dart';
 import '../core/services/payment_service.dart';
 
@@ -85,12 +85,12 @@ class FixResumeState {
     String? pdfPath,
     bool? isGeneratingPdf,
   }) => FixResumeState(
-        isLoading: isLoading ?? this.isLoading,
-        result: result ?? this.result,
-        error: error == _keep ? this.error : error as String?,
-        pdfPath: pdfPath ?? this.pdfPath,
-        isGeneratingPdf: isGeneratingPdf ?? this.isGeneratingPdf,
-      );
+    isLoading: isLoading ?? this.isLoading,
+    result: result ?? this.result,
+    error: error == _keep ? this.error : error as String?,
+    pdfPath: pdfPath ?? this.pdfPath,
+    isGeneratingPdf: isGeneratingPdf ?? this.isGeneratingPdf,
+  );
 }
 
 const _keep = Object();
@@ -100,7 +100,7 @@ class FixResumeNotifier extends StateNotifier<FixResumeState> {
   final ResumePdfService _pdfService;
 
   FixResumeNotifier(this._service, this._pdfService)
-      : super(const FixResumeState());
+    : super(const FixResumeState());
 
   Future<void> fix({required String resumeText, String jobTitle = ''}) async {
     state = state.copyWith(isLoading: true, error: null);
@@ -115,7 +115,10 @@ class FixResumeNotifier extends StateNotifier<FixResumeState> {
     }
   }
 
-  Future<void> generatePdf({required String resumeText, required String name}) async {
+  Future<void> generatePdf({
+    required String resumeText,
+    required String name,
+  }) async {
     state = state.copyWith(isGeneratingPdf: true);
     try {
       final path = await _pdfService.generatePdf(
@@ -133,11 +136,11 @@ class FixResumeNotifier extends StateNotifier<FixResumeState> {
 
 final fixResumeProvider =
     StateNotifierProvider.autoDispose<FixResumeNotifier, FixResumeState>((ref) {
-  return FixResumeNotifier(
-    ref.read(resumeImproveServiceProvider),
-    ref.read(resumePdfServiceProvider),
-  );
-});
+      return FixResumeNotifier(
+        ref.read(resumeImproveServiceProvider),
+        ref.read(resumePdfServiceProvider),
+      );
+    });
 
 // ─── JD Optimize State ────────────────────────────────────────────────────────
 
@@ -163,12 +166,12 @@ class JdOptimizeState {
     String? pdfPath,
     bool? isGeneratingPdf,
   }) => JdOptimizeState(
-        isLoading: isLoading ?? this.isLoading,
-        result: result ?? this.result,
-        error: error == _keep ? this.error : error as String?,
-        pdfPath: pdfPath ?? this.pdfPath,
-        isGeneratingPdf: isGeneratingPdf ?? this.isGeneratingPdf,
-      );
+    isLoading: isLoading ?? this.isLoading,
+    result: result ?? this.result,
+    error: error == _keep ? this.error : error as String?,
+    pdfPath: pdfPath ?? this.pdfPath,
+    isGeneratingPdf: isGeneratingPdf ?? this.isGeneratingPdf,
+  );
 }
 
 class JdOptimizeNotifier extends StateNotifier<JdOptimizeState> {
@@ -176,7 +179,7 @@ class JdOptimizeNotifier extends StateNotifier<JdOptimizeState> {
   final ResumePdfService _pdfService;
 
   JdOptimizeNotifier(this._service, this._pdfService)
-      : super(const JdOptimizeState());
+    : super(const JdOptimizeState());
 
   Future<void> optimize({
     required String resumeText,
@@ -194,7 +197,10 @@ class JdOptimizeNotifier extends StateNotifier<JdOptimizeState> {
     }
   }
 
-  Future<void> generatePdf({required String resumeText, required String name}) async {
+  Future<void> generatePdf({
+    required String resumeText,
+    required String name,
+  }) async {
     state = state.copyWith(isGeneratingPdf: true);
     try {
       final path = await _pdfService.generatePdf(
@@ -211,12 +217,14 @@ class JdOptimizeNotifier extends StateNotifier<JdOptimizeState> {
 }
 
 final jdOptimizeProvider =
-    StateNotifierProvider.autoDispose<JdOptimizeNotifier, JdOptimizeState>((ref) {
-  return JdOptimizeNotifier(
-    ref.read(resumeImproveServiceProvider),
-    ref.read(resumePdfServiceProvider),
-  );
-});
+    StateNotifierProvider.autoDispose<JdOptimizeNotifier, JdOptimizeState>((
+      ref,
+    ) {
+      return JdOptimizeNotifier(
+        ref.read(resumeImproveServiceProvider),
+        ref.read(resumePdfServiceProvider),
+      );
+    });
 
 // ─── Rejection Reasons State ──────────────────────────────────────────────────
 
@@ -236,7 +244,10 @@ class RejectionNotifier extends StateNotifier<RejectionState> {
   final ResumeImproveService _service;
   RejectionNotifier(this._service) : super(const RejectionState());
 
-  Future<void> analyze({required String resumeText, String jobTitle = ''}) async {
+  Future<void> analyze({
+    required String resumeText,
+    String jobTitle = '',
+  }) async {
     state = const RejectionState(isLoading: true);
     try {
       final reasons = await _service.getWhyRejected(
@@ -254,8 +265,8 @@ class RejectionNotifier extends StateNotifier<RejectionState> {
 
 final rejectionProvider =
     StateNotifierProvider.autoDispose<RejectionNotifier, RejectionState>((ref) {
-  return RejectionNotifier(ref.read(resumeImproveServiceProvider));
-});
+      return RejectionNotifier(ref.read(resumeImproveServiceProvider));
+    });
 
 // ─── Project Improver State ───────────────────────────────────────────────────
 
@@ -288,8 +299,10 @@ class ProjectImproveNotifier extends StateNotifier<ProjectImproveState> {
 }
 
 final projectImproveProvider =
-    StateNotifierProvider.autoDispose<ProjectImproveNotifier, ProjectImproveState>(
-        (ref) => ProjectImproveNotifier(ref.read(resumeImproveServiceProvider)));
+    StateNotifierProvider.autoDispose<
+      ProjectImproveNotifier,
+      ProjectImproveState
+    >((ref) => ProjectImproveNotifier(ref.read(resumeImproveServiceProvider)));
 
 // ─── Selection Booster State ──────────────────────────────────────────────────
 
@@ -298,14 +311,22 @@ class SelectionBoosterState {
   final SelectionBooster? result;
   final String? error;
 
-  const SelectionBoosterState({this.isLoading = false, this.result, this.error});
+  const SelectionBoosterState({
+    this.isLoading = false,
+    this.result,
+    this.error,
+  });
 }
 
 class SelectionBoosterNotifier extends StateNotifier<SelectionBoosterState> {
   final ResumeImproveService _service;
-  SelectionBoosterNotifier(this._service) : super(const SelectionBoosterState());
+  SelectionBoosterNotifier(this._service)
+    : super(const SelectionBoosterState());
 
-  Future<void> analyze({required String resumeText, String jobTitle = ''}) async {
+  Future<void> analyze({
+    required String resumeText,
+    String jobTitle = '',
+  }) async {
     state = const SelectionBoosterState(isLoading: true);
     try {
       final result = await _service.getSelectionBoosters(
@@ -317,8 +338,118 @@ class SelectionBoosterNotifier extends StateNotifier<SelectionBoosterState> {
       state = SelectionBoosterState(error: e.toString());
     }
   }
+
+  void setError(String message) {
+    state = SelectionBoosterState(error: message);
+  }
 }
 
 final selectionBoosterProvider =
-    StateNotifierProvider.autoDispose<SelectionBoosterNotifier, SelectionBoosterState>(
-        (ref) => SelectionBoosterNotifier(ref.read(resumeImproveServiceProvider)));
+    StateNotifierProvider.autoDispose<
+      SelectionBoosterNotifier,
+      SelectionBoosterState
+    >(
+      (ref) => SelectionBoosterNotifier(ref.read(resumeImproveServiceProvider)),
+    );
+
+// ─── Resume Generator State ───────────────────────────────────────────────────
+
+class ResumeGeneratorState {
+  final bool isLoading;
+  final GeneratedResume? result;
+  final String? error;
+  final String? pdfPath;
+  final bool isGeneratingPdf;
+
+  const ResumeGeneratorState({
+    this.isLoading = false,
+    this.result,
+    this.error,
+    this.pdfPath,
+    this.isGeneratingPdf = false,
+  });
+
+  ResumeGeneratorState copyWith({
+    bool? isLoading,
+    GeneratedResume? result,
+    Object? error = _keep,
+    String? pdfPath,
+    bool? isGeneratingPdf,
+  }) => ResumeGeneratorState(
+    isLoading: isLoading ?? this.isLoading,
+    result: result ?? this.result,
+    error: error == _keep ? this.error : error as String?,
+    pdfPath: pdfPath ?? this.pdfPath,
+    isGeneratingPdf: isGeneratingPdf ?? this.isGeneratingPdf,
+  );
+}
+
+class ResumeGeneratorNotifier extends StateNotifier<ResumeGeneratorState> {
+  final ResumeImproveService _service;
+  final ResumePdfService _pdfService;
+
+  ResumeGeneratorNotifier(this._service, this._pdfService)
+    : super(const ResumeGeneratorState());
+
+  Future<void> generate({
+    required String fullName,
+    required String email,
+    required String phone,
+    required String location,
+    required String targetRole,
+    required String yearsExp,
+    required List<ExperienceEntry> experiences,
+    required String education,
+    required String skills,
+    required List<ProjectEntry> projects,
+    String existingResumeText = '',
+  }) async {
+    state = state.copyWith(isLoading: true, error: null);
+    try {
+      final result = await _service.generateResume(
+        fullName: fullName,
+        email: email,
+        phone: phone,
+        location: location,
+        targetRole: targetRole,
+        yearsExp: yearsExp,
+        experiences: experiences,
+        education: education,
+        skills: skills,
+        projects: projects,
+        existingResumeText: existingResumeText,
+      );
+      state = state.copyWith(isLoading: false, result: result);
+    } catch (e) {
+      state = state.copyWith(isLoading: false, error: e.toString());
+    }
+  }
+
+  Future<void> generatePdf({required String name}) async {
+    final text = state.result?.resumeText;
+    if (text == null) return;
+    state = state.copyWith(isGeneratingPdf: true);
+    try {
+      final path = await _pdfService.generatePdf(
+        resumeText: text,
+        fileName: '${name.replaceAll(' ', '_')}_AI_resume',
+      );
+      state = state.copyWith(isGeneratingPdf: false, pdfPath: path);
+    } catch (e) {
+      state = state.copyWith(isGeneratingPdf: false, error: e.toString());
+    }
+  }
+
+  void reset() => state = const ResumeGeneratorState();
+}
+
+final resumeGeneratorProvider =
+    StateNotifierProvider.autoDispose<
+      ResumeGeneratorNotifier,
+      ResumeGeneratorState
+    >(
+      (ref) => ResumeGeneratorNotifier(
+        ref.read(resumeImproveServiceProvider),
+        ref.read(resumePdfServiceProvider),
+      ),
+    );

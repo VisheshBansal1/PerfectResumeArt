@@ -7,9 +7,8 @@ import '../../../core/constants/app_constants.dart';
 import '../../../core/constants/app_theme.dart';
 import '../../../models/models.dart';
 import '../../../providers/providers.dart';
-import '../../../providers/premium_providers.dart';
+import '../../../providers/resume_context_provider.dart';
 import '../../../features/premium/screens/premium_hub_screen.dart';
-import '../../../features/auth/providers/auth_provider.dart';
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -1510,7 +1509,6 @@ class _CircleScore extends StatelessWidget {
   }
 }
 
-
 // ─── Premium CTA at bottom of analysis ────────────────────────────────────────
 
 class _PremiumCta extends ConsumerWidget {
@@ -1520,7 +1518,16 @@ class _PremiumCta extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final resumeAsync = ref.watch(resumeByIdProvider(analysis.resumeId));
-    final resumeText = resumeAsync.whenOrNull(data: (r) => r?.extractedText) ?? '';
+    final resumeText =
+        resumeAsync.whenOrNull(data: (r) => r?.extractedText) ?? '';
+    // Save to global context whenever we have the resume text
+    if (resumeText.isNotEmpty) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        ref
+            .read(resumeContextProvider.notifier)
+            .setResume(resumeText, source: 'analysis');
+      });
+    }
 
     return GestureDetector(
       onTap: () => Navigator.push(
@@ -1542,54 +1549,75 @@ class _PremiumCta extends ConsumerWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Row(children: [
-              const Text('✨', style: TextStyle(fontSize: 20)),
-              const SizedBox(width: 8),
-              const Text(
-                'Improve This Resume',
-                style: TextStyle(
-                  color: Colors.white,
-                  fontWeight: FontWeight.w700,
-                  fontSize: 15,
-                ),
-              ),
-              const Spacer(),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                decoration: BoxDecoration(
-                  color: const Color(0xFFFF6B35).withOpacity(0.2),
-                  borderRadius: BorderRadius.circular(6),
-                ),
-                child: const Text('Premium', style: TextStyle(color: Color(0xFFFF6B35), fontSize: 11, fontWeight: FontWeight.w700)),
-              ),
-            ]),
-            const SizedBox(height: 10),
-            const Text(
-              'AI rewrite · JD matching · ATS boost · PDF download · Human review',
-              style: TextStyle(color: Colors.white54, fontSize: 12, height: 1.4),
-            ),
-            const SizedBox(height: 14),
-            Row(children: [
-              Expanded(
-                child: Container(
-                  padding: const EdgeInsets.symmetric(vertical: 12),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFF2D5BE3),
-                    borderRadius: BorderRadius.circular(10),
+            Row(
+              children: [
+                const Text('✨', style: TextStyle(fontSize: 20)),
+                const SizedBox(width: 8),
+                const Text(
+                  'Improve This Resume',
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontWeight: FontWeight.w700,
+                    fontSize: 15,
                   ),
-                  child: const Center(
-                    child: Text(
-                      'See All Features →',
-                      style: TextStyle(color: Colors.white, fontWeight: FontWeight.w700, fontSize: 14),
+                ),
+                const Spacer(),
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 8,
+                    vertical: 3,
+                  ),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFFF6B35).withOpacity(0.2),
+                    borderRadius: BorderRadius.circular(6),
+                  ),
+                  child: const Text(
+                    'Premium',
+                    style: TextStyle(
+                      color: Color(0xFFFF6B35),
+                      fontSize: 11,
+                      fontWeight: FontWeight.w700,
                     ),
                   ),
                 ),
+              ],
+            ),
+            const SizedBox(height: 10),
+            const Text(
+              'AI rewrite · JD matching · ATS boost · PDF download · Human review',
+              style: TextStyle(
+                color: Colors.white54,
+                fontSize: 12,
+                height: 1.4,
               ),
-            ]),
+            ),
+            const SizedBox(height: 14),
+            Row(
+              children: [
+                Expanded(
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(vertical: 12),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF2D5BE3),
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: const Center(
+                      child: Text(
+                        'See All Features →',
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontWeight: FontWeight.w700,
+                          fontSize: 14,
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
           ],
         ),
       ),
     );
   }
-
 }

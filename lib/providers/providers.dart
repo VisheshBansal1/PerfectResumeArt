@@ -425,6 +425,34 @@ class ResumeUploadNotifier extends StateNotifier<ResumeUploadState> {
     }
   }
 
+  /// Re-run ATS check on already-extracted resume text (no re-upload needed)
+  Future<String?> uploadAndAnalyzeAtsFromText(String resumeText) async {
+    final uid = FirebaseAuth.instance.currentUser?.uid;
+    if (uid == null) return null;
+    if (resumeText.trim().isEmpty) return null;
+    try {
+      state = state.copyWith(isAnalyzing: true, error: null);
+      final resume = await _firebaseService.saveResumeMetadata(
+        userId: uid,
+        fileName: 'resume_recheck.pdf',
+        fileType: 'pdf',
+        extractedText: resumeText,
+      );
+      state = state.copyWith(uploadedResumeId: resume.id);
+      final analysis = await _aiService.analyzeAtsOnly(
+        resumeText: resumeText,
+        userId: uid,
+        resumeId: resume.id,
+      );
+      final analysisId = await _firebaseService.saveAnalysis(analysis);
+      state = state.copyWith(isAnalyzing: false, analysisId: analysisId);
+      return analysisId;
+    } catch (e) {
+      state = state.copyWith(isAnalyzing: false, error: e.toString());
+      return null;
+    }
+  }
+
   Future<String?> uploadAndAnalyzeAtsFromBytes({
     required Uint8List bytes,
     required String fileName,

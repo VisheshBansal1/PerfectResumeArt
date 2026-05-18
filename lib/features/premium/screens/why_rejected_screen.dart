@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/constants/app_theme.dart';
 import '../../../core/services/resume_improve_service.dart';
 import '../../../providers/premium_providers.dart';
+import '../../../providers/resume_context_provider.dart';
 
 class WhyRejectedScreen extends ConsumerStatefulWidget {
   final String resumeText;
@@ -11,7 +12,7 @@ class WhyRejectedScreen extends ConsumerStatefulWidget {
 
   const WhyRejectedScreen({
     super.key,
-    required this.resumeText,
+    this.resumeText = '',
     this.jobTitle = '',
   });
 
@@ -28,11 +29,25 @@ class _WhyRejectedScreenState extends ConsumerState<WhyRejectedScreen> {
     WidgetsBinding.instance.addPostFrameCallback((_) => _start());
   }
 
+  // String get _effectiveText {
+  //   if (widget.resumeText.trim().length > 50) return widget.resumeText;
+  //   return ref.read(resumeContextProvider).text;
+  // }
+
+  String get _effectiveText {
+    if (widget.resumeText.trim().length > 50) return widget.resumeText;
+    return ref.read(resumeContextProvider).text;
+  }
+
   void _start() {
     setState(() => _started = true);
+    final ctx = ref.read(resumeContextProvider);
+    final jobTitle = widget.jobTitle.isNotEmpty
+        ? widget.jobTitle
+        : ctx.detectedRole;
     ref
         .read(rejectionProvider.notifier)
-        .analyze(resumeText: widget.resumeText, jobTitle: widget.jobTitle);
+        .analyze(resumeText: _effectiveText, jobTitle: jobTitle);
   }
 
   @override

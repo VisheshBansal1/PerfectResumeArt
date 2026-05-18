@@ -1,14 +1,23 @@
-import 'package:flutter/material.dart';
-import 'package:flutter/foundation.dart' show kIsWeb;
-import 'package:flutter_dotenv/flutter_dotenv.dart';
-import 'package:razorpay_flutter/razorpay_flutter.dart';
+import 'dart:convert';
+import 'dart:async';
 
-enum PaymentPlan {
-  fixResume,      // ₹39
-  jdOptimize,     // ₹49
-  bundle,         // ₹89
-  humanReview,    // ₹129
-}
+import 'package:flutter/foundation.dart' show kIsWeb;
+import 'package:flutter/material.dart';
+import 'package:flutter_dotenv/flutter_dotenv.dart';
+import 'package:http/http.dart' as http;
+
+// Mobile-only — conditional import prevents web crash
+import 'package:razorpay_flutter/razorpay_flutter.dart'
+    if (dart.library.html) 'razorpay_web_stub.dart';
+
+// JS bridge: dart:js_interop on web, no-op stub on mobile
+import 'payment_js_bridge.dart'
+    if (dart.library.io) 'payment_js_bridge_stub.dart'
+    as bridge;
+
+// ─── Payment Plans ────────────────────────────────────────────────────────────
+
+enum PaymentPlan { fixResume, jdOptimize, bundle, humanReview, resumeGenerator }
 
 extension PaymentPlanX on PaymentPlan {
   String get title {
@@ -21,19 +30,39 @@ extension PaymentPlanX on PaymentPlan {
         return 'Full Upgrade Bundle';
       case PaymentPlan.humanReview:
         return 'Expert Human Review';
+      case PaymentPlan.resumeGenerator:
+        return 'AI Resume Builder';
     }
   }
 
   int get amountInPaise {
     switch (this) {
       case PaymentPlan.fixResume:
-        return 3900; // ₹39
+        return 3900;
       case PaymentPlan.jdOptimize:
-        return 4900; // ₹49
+        return 4900;
       case PaymentPlan.bundle:
-        return 8900; // ₹89
+        return 8900;
       case PaymentPlan.humanReview:
-        return 12900; // ₹129
+        return 12900;
+      case PaymentPlan.resumeGenerator:
+        return 4900; // ₹49
+    }
+  }
+
+  // Plan key must match backend VALID_PLANS in validate.js
+  String get planKey {
+    switch (this) {
+      case PaymentPlan.fixResume:
+        return 'fixResume';
+      case PaymentPlan.jdOptimize:
+        return 'jdOptimize';
+      case PaymentPlan.bundle:
+        return 'bundle';
+      case PaymentPlan.humanReview:
+        return 'humanReview';
+      case PaymentPlan.resumeGenerator:
+        return 'resumeGenerator';
     }
   }
 
@@ -47,6 +76,8 @@ extension PaymentPlanX on PaymentPlan {
         return '₹89';
       case PaymentPlan.humanReview:
         return '₹129';
+      case PaymentPlan.resumeGenerator:
+        return '₹49';
     }
   }
 
@@ -60,110 +91,318 @@ extension PaymentPlanX on PaymentPlan {
         return 'Fix Resume + JD Optimization + ATS Boost + PDF Download';
       case PaymentPlan.humanReview:
         return 'Expert manually reviews and rewrites your resume in 24 hrs';
+      case PaymentPlan.resumeGenerator:
+        return 'AI builds a complete professional resume from your info + PDF download';
     }
   }
 }
 
+// ─── Payment Result ───────────────────────────────────────────────────────────
+
 class PaymentResult {
   final bool success;
   final String? paymentId;
+  final String? orderId;
   final String? error;
-
-  const PaymentResult({required this.success, this.paymentId, this.error});
+  const PaymentResult({
+    required this.success,
+    this.paymentId,
+    this.orderId,
+    this.error,
+  });
 }
 
-/// Razorpay payment service for real INR payments.
-/// Requires RAZORPAY_KEY_ID in .env
+// ─── Payment Service ──────────────────────────────────────────────────────────
+
 class PaymentService {
+  static String get _backendUrl =>
+      dotenv.env['BACKEND_URL'] ?? 'http://localhost:3000';
   static String get _keyId => dotenv.env['RAZORPAY_KEY_ID'] ?? '';
 
   Razorpay? _razorpay;
-  Function(PaymentResult)? _onResult;
 
-  void _initRazorpay() {
-    _razorpay = Razorpay();
-    _razorpay!.on(Razorpay.EVENT_PAYMENT_SUCCESS, _handleSuccess);
-    _razorpay!.on(Razorpay.EVENT_PAYMENT_ERROR, _handleError);
-    _razorpay!.on(Razorpay.EVENT_EXTERNAL_WALLET, _handleExternalWallet);
+  // ── Step 1: Create order via backend ────────────────────────────────────────
+  Future<Map<String, dynamic>?> _createOrder(PaymentPlan plan) async {
+    final url = '$_backendUrl/api/payment/create-order';
+    debugPrint('[PAY] _createOrder → POST $url  plan=${plan.planKey}');
+
+    late http.Response response;
+    try {
+      response = await http.post(
+        Uri.parse(url),
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({'plan': plan.planKey}),
+      );
+    } catch (e) {
+      debugPrint('[PAY] _createOrder network error: $e');
+      throw Exception(
+        'Network error — is BACKEND_URL correct?\nURL tried: $url\nError: $e',
+      );
+    }
+
+    debugPrint(
+      '[PAY] _createOrder response ${response.statusCode}: ${response.body}',
+    );
+
+    if (response.statusCode == 200) {
+      final data = jsonDecode(response.body) as Map<String, dynamic>;
+      debugPrint('[PAY] Order created: ${data['order_id']}');
+      return data;
+    }
+
+    String errorMsg = 'Server error ${response.statusCode}';
+    try {
+      final body = jsonDecode(response.body) as Map<String, dynamic>;
+      errorMsg = body['error']?.toString() ?? errorMsg;
+    } catch (_) {}
+    throw Exception(errorMsg);
   }
 
-  void _handleSuccess(PaymentSuccessResponse response) {
-    _onResult?.call(PaymentResult(success: true, paymentId: response.paymentId));
-    _dispose();
+  // ── Step 2 (Web): Verify payment via backend ─────────────────────────────
+  Future<bool> _verifyPayment({
+    required String orderId,
+    required String paymentId,
+    required String signature,
+  }) async {
+    debugPrint('[PAY] _verifyPayment → order=$orderId payment=$paymentId');
+    try {
+      final response = await http.post(
+        Uri.parse('$_backendUrl/api/payment/verify-payment'),
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({
+          'razorpay_order_id': orderId,
+          'razorpay_payment_id': paymentId,
+          'razorpay_signature': signature,
+        }),
+      );
+      debugPrint(
+        '[PAY] _verifyPayment response ${response.statusCode}: ${response.body}',
+      );
+      final body = jsonDecode(response.body) as Map<String, dynamic>;
+      return body['success'] == true;
+    } catch (e) {
+      debugPrint('[PAY] _verifyPayment error: $e');
+      return false;
+    }
   }
 
-  void _handleError(PaymentFailureResponse response) {
-    _onResult?.call(PaymentResult(success: false, error: response.message));
-    _dispose();
-  }
-
-  void _handleExternalWallet(ExternalWalletResponse response) {
-    _onResult?.call(PaymentResult(success: false, error: 'External wallet selected'));
-    _dispose();
-  }
-
-  void _dispose() {
-    _razorpay?.clear();
-    _razorpay = null;
-    _onResult = null;
-  }
-
-  /// Opens Razorpay checkout for the given plan.
-  /// Returns a [PaymentResult] via the callback.
+  // ── Main entry ──────────────────────────────────────────────────────────────
   Future<void> startPayment({
     required PaymentPlan plan,
     required String userEmail,
     required String userName,
     required Function(PaymentResult) onResult,
   }) async {
-    // Razorpay native SDK does not support Flutter Web
     if (kIsWeb) {
-      onResult(const PaymentResult(
-        success: false,
-        error: 'Payments are only supported in the mobile app. Please download the app to unlock premium features.',
-      ));
-      return;
+      await _startWebPayment(
+        plan: plan,
+        userEmail: userEmail,
+        userName: userName,
+        onResult: onResult,
+      );
+    } else {
+      await _startMobilePayment(
+        plan: plan,
+        userEmail: userEmail,
+        userName: userName,
+        onResult: onResult,
+      );
     }
+  }
 
-    if (_keyId.isEmpty) {
-      onResult(const PaymentResult(
-        success: false,
-        error: 'Razorpay key not configured. Add RAZORPAY_KEY_ID to .env',
-      ));
-      return;
-    }
-
-    _initRazorpay();
-    _onResult = onResult;
-
-    final options = {
-      'key': _keyId,
-      'amount': plan.amountInPaise,
-      'currency': 'INR',
-      'name': 'ResumeAI',
-      'description': plan.description,
-      'prefill': {
-        'name': userName,
-        'email': userEmail,
-        'contact': '',
-      },
-      'theme': {'color': '#2D5BE3'},
-      'modal': {
-        'confirm_close': true,
-        'animation': true,
-      },
-    };
-
+  // ── WEB: Backend order → JS bridge → Checkout.js → Backend verify ──────────
+  //
+  // KEY FIX: js.JsObject.jsify() cannot handle Dart function values.
+  // So we split the flow into two JS calls:
+  //   1. registerRazorpayCallbacks(onSuccess, onDismiss) — registers Dart fns
+  //   2. openRazorpayCheckout(key, orderId, ...) — only scalar values, safe to pass
+  // The JS in index.html builds the full options object and wires callbacks.
+  Future<void> _startWebPayment({
+    required PaymentPlan plan,
+    required String userEmail,
+    required String userName,
+    required Function(PaymentResult) onResult,
+  }) async {
     try {
-      _razorpay!.open(options);
+      // Step 1: Create order via backend
+      final orderData = await _createOrder(plan);
+      if (orderData == null || orderData['success'] != true) {
+        onResult(
+          const PaymentResult(
+            success: false,
+            error: 'Could not create payment order. Check BACKEND_URL in .env',
+          ),
+        );
+        return;
+      }
+
+      final orderId = orderData['order_id'] as String;
+      final amount = orderData['amount'] as int;
+      final keyId = (orderData['key_id'] as String?)?.isNotEmpty == true
+          ? orderData['key_id'] as String
+          : _keyId;
+
+      final completer = Completer<PaymentResult>();
+
+      debugPrint('[PAY] Step 2: register JS callbacks via bridge');
+      // Step 2: use dart:js_interop bridge (dart:js is deprecated in Dart 3)
+      bridge.registerRazorpayCallbacks(
+        onSuccess:
+            (String paymentId, String rzpOrderId, String signature) async {
+              debugPrint('[PAY] JS onSuccess: paymentId=$paymentId');
+              if (completer.isCompleted) return;
+              try {
+                final verified = await _verifyPayment(
+                  orderId: orderId,
+                  paymentId: paymentId,
+                  signature: signature,
+                );
+                completer.complete(
+                  PaymentResult(
+                    success: verified,
+                    paymentId: paymentId,
+                    orderId: orderId,
+                    error: verified
+                        ? null
+                        : 'Payment verification failed. Contact support.',
+                  ),
+                );
+              } catch (e) {
+                completer.complete(
+                  PaymentResult(
+                    success: false,
+                    error: 'Verification error: $e',
+                  ),
+                );
+              }
+            },
+        onDismiss: () {
+          debugPrint('[PAY] JS onDismiss called');
+          if (!completer.isCompleted) {
+            completer.complete(
+              const PaymentResult(success: false, error: 'Payment cancelled'),
+            );
+          }
+        },
+      );
+
+      debugPrint(
+        '[PAY] Step 3: open Razorpay checkout — key=$keyId orderId=$orderId amount=$amount',
+      );
+      // Step 3: scalar values only — bridge handles JS interop
+      bridge.openRazorpayCheckout(
+        keyId: keyId,
+        orderId: orderId,
+        amount: amount,
+        currency: 'INR',
+        name: 'Resume AI',
+        description: plan.description,
+        userEmail: userEmail,
+        userName: userName,
+      );
+
+      debugPrint('[PAY] Waiting for Razorpay callback (max 5 min)...');
+
+      // Timeout on completer — if Razorpay modal opens but callbacks
+      // never fire (rare edge case), we don't hang forever
+      final result = await completer.future.timeout(
+        const Duration(minutes: 5),
+        onTimeout: () {
+          debugPrint('[PAY] completer timed out — no callback received');
+          return const PaymentResult(
+            success: false,
+            error: 'Payment session expired. Please try again.',
+          );
+        },
+      );
+
+      debugPrint(
+        '[PAY] completer resolved: success=${result.success} error=${result.error}',
+      );
+      onResult(result);
+    } catch (e) {
+      debugPrint('[PAY] _startWebPayment caught: $e');
+      onResult(PaymentResult(success: false, error: e.toString()));
+    }
+  }
+
+  // ── MOBILE: Backend order → Native plugin ───────────────────────────────────
+  Future<void> _startMobilePayment({
+    required PaymentPlan plan,
+    required String userEmail,
+    required String userName,
+    required Function(PaymentResult) onResult,
+  }) async {
+    if (_keyId.isEmpty) {
+      onResult(
+        const PaymentResult(
+          success: false,
+          error: 'RAZORPAY_KEY_ID not set in .env',
+        ),
+      );
+      return;
+    }
+    try {
+      final orderData = await _createOrder(plan);
+      if (orderData == null || orderData['success'] != true) {
+        onResult(
+          const PaymentResult(
+            success: false,
+            error: 'Could not create payment order',
+          ),
+        );
+        return;
+      }
+      final orderId = orderData['order_id'] as String;
+
+      _razorpay = Razorpay();
+      _razorpay!.on(Razorpay.EVENT_PAYMENT_SUCCESS, (PaymentSuccessResponse r) {
+        onResult(
+          PaymentResult(
+            success: true,
+            paymentId: r.paymentId,
+            orderId: r.orderId,
+          ),
+        );
+        _disposeRazorpay();
+      });
+      _razorpay!.on(Razorpay.EVENT_PAYMENT_ERROR, (PaymentFailureResponse r) {
+        onResult(PaymentResult(success: false, error: r.message));
+        _disposeRazorpay();
+      });
+      _razorpay!.on(Razorpay.EVENT_EXTERNAL_WALLET, (ExternalWalletResponse r) {
+        onResult(
+          const PaymentResult(
+            success: false,
+            error: 'External wallet selected',
+          ),
+        );
+        _disposeRazorpay();
+      });
+      _razorpay!.open({
+        'key': _keyId,
+        'amount': plan.amountInPaise,
+        'currency': 'INR',
+        'order_id': orderId,
+        'name': 'Resume AI',
+        'description': plan.description,
+        'prefill': {'name': userName, 'email': userEmail, 'contact': ''},
+        'theme': {'color': '#2D5BE3'},
+      });
     } catch (e) {
       onResult(PaymentResult(success: false, error: e.toString()));
-      _dispose();
+      _disposeRazorpay();
     }
+  }
+
+  void _disposeRazorpay() {
+    _razorpay?.clear();
+    _razorpay = null;
   }
 }
 
 // ─── Paywall Bottom Sheet ─────────────────────────────────────────────────────
+
 class PaywallSheet extends StatefulWidget {
   final PaymentPlan plan;
   final String userEmail;
@@ -208,22 +447,46 @@ class _PaywallSheetState extends State<PaywallSheet> {
   String? _error;
 
   Future<void> _pay() async {
-    setState(() { _loading = true; _error = null; });
+    setState(() {
+      _loading = true;
+      _error = null;
+    });
+    debugPrint('[PAY] _pay() started — plan=${widget.plan.planKey}');
 
-    await _paymentService.startPayment(
-      plan: widget.plan,
-      userEmail: widget.userEmail,
-      userName: widget.userName,
-      onResult: (result) {
-        if (!mounted) return;
+    try {
+      await _paymentService.startPayment(
+        plan: widget.plan,
+        userEmail: widget.userEmail,
+        userName: widget.userName,
+        onResult: (result) {
+          debugPrint(
+            '[PAY] onResult called — success=${result.success} error=${result.error}',
+          );
+          if (!mounted) return;
+          setState(() => _loading = false);
+          if (result.success) {
+            widget.onSuccess();
+          } else {
+            setState(
+              () =>
+                  _error = result.error ?? 'Payment failed. Please try again.',
+            );
+          }
+        },
+      );
+    } catch (e) {
+      debugPrint('[PAY] _pay() uncaught: $e');
+      if (mounted)
+        setState(() {
+          _loading = false;
+          _error = e.toString();
+        });
+    } finally {
+      // Safety net — ensure spinner always stops
+      if (mounted && _loading) {
         setState(() => _loading = false);
-        if (result.success) {
-          widget.onSuccess();
-        } else {
-          setState(() => _error = result.error ?? 'Payment failed. Please try again.');
-        }
-      },
-    );
+      }
+    }
   }
 
   @override
@@ -240,10 +503,10 @@ class _PaywallSheetState extends State<PaywallSheet> {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            // Handle
             Center(
               child: Container(
-                width: 40, height: 4,
+                width: 40,
+                height: 4,
                 margin: const EdgeInsets.only(bottom: 20),
                 decoration: BoxDecoration(
                   color: Colors.grey[300],
@@ -251,14 +514,18 @@ class _PaywallSheetState extends State<PaywallSheet> {
                 ),
               ),
             ),
-            // Lock icon + title
             Container(
-              width: 56, height: 56,
+              width: 56,
+              height: 56,
               decoration: BoxDecoration(
                 color: const Color(0xFF2D5BE3).withOpacity(0.1),
                 borderRadius: BorderRadius.circular(16),
               ),
-              child: const Icon(Icons.lock_open_rounded, color: Color(0xFF2D5BE3), size: 28),
+              child: const Icon(
+                Icons.lock_open_rounded,
+                color: Color(0xFF2D5BE3),
+                size: 28,
+              ),
             ),
             const SizedBox(height: 12),
             Text(
@@ -269,18 +536,27 @@ class _PaywallSheetState extends State<PaywallSheet> {
             Text(
               plan.description,
               textAlign: TextAlign.center,
-              style: TextStyle(fontSize: 13, color: Colors.grey[600], height: 1.4),
+              style: const TextStyle(fontSize: 13, height: 1.4),
             ),
             const SizedBox(height: 20),
-            // Feature list
-            ..._features(plan).map((f) => Padding(
-              padding: const EdgeInsets.symmetric(vertical: 4),
-              child: Row(children: [
-                const Icon(Icons.check_circle, color: Color(0xFF43A047), size: 18),
-                const SizedBox(width: 10),
-                Expanded(child: Text(f, style: const TextStyle(fontSize: 13))),
-              ]),
-            )),
+            ..._features(plan).map(
+              (f) => Padding(
+                padding: const EdgeInsets.symmetric(vertical: 4),
+                child: Row(
+                  children: [
+                    const Icon(
+                      Icons.check_circle,
+                      color: Color(0xFF43A047),
+                      size: 18,
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Text(f, style: const TextStyle(fontSize: 13)),
+                    ),
+                  ],
+                ),
+              ),
+            ),
             const SizedBox(height: 24),
             if (_error != null)
               Container(
@@ -290,9 +566,14 @@ class _PaywallSheetState extends State<PaywallSheet> {
                   color: const Color(0xFFE53935).withOpacity(0.08),
                   borderRadius: BorderRadius.circular(8),
                 ),
-                child: Text(_error!, style: const TextStyle(color: Color(0xFFE53935), fontSize: 13)),
+                child: Text(
+                  _error!,
+                  style: const TextStyle(
+                    color: Color(0xFFE53935),
+                    fontSize: 13,
+                  ),
+                ),
               ),
-            // Pay button
             SizedBox(
               width: double.infinity,
               height: 52,
@@ -301,24 +582,33 @@ class _PaywallSheetState extends State<PaywallSheet> {
                 style: ElevatedButton.styleFrom(
                   backgroundColor: const Color(0xFF2D5BE3),
                   foregroundColor: Colors.white,
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
                 ),
                 child: _loading
                     ? const SizedBox(
-                        width: 22, height: 22,
-                        child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2.5),
+                        width: 22,
+                        height: 22,
+                        child: CircularProgressIndicator(
+                          color: Colors.white,
+                          strokeWidth: 2.5,
+                        ),
                       )
                     : Text(
                         'Unlock for ${plan.displayPrice}',
-                        style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
+                        style: const TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.w700,
+                        ),
                       ),
               ),
             ),
             const SizedBox(height: 10),
-            Text(
+            const Text(
               '🔒 Secure payment via Razorpay · One-time · No subscription',
               textAlign: TextAlign.center,
-              style: TextStyle(fontSize: 11, color: Colors.grey[500]),
+              style: TextStyle(fontSize: 11),
             ),
           ],
         ),
@@ -358,6 +648,15 @@ class _PaywallSheetState extends State<PaywallSheet> {
           'Delivered in 24 hours via email',
           'One free revision included',
           'LinkedIn headline bonus tip',
+        ];
+      case PaymentPlan.resumeGenerator:
+        return [
+          'Complete AI-generated professional resume',
+          'ATS-optimized bullets with action verbs + metrics',
+          'PDF download (ready to apply)',
+          'Top 10 ATS keywords for your target role',
+          '4 best-fit job role suggestions',
+          '🔗 LinkedIn About section (bonus)',
         ];
     }
   }

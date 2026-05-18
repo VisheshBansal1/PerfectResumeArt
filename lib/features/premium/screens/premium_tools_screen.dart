@@ -1,11 +1,16 @@
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:http/http.dart' as http;
 
 import '../../../core/constants/app_theme.dart';
 import '../../../core/services/resume_improve_service.dart';
 import '../../../core/services/payment_service.dart';
 import '../../../providers/premium_providers.dart';
+import '../../../providers/resume_context_provider.dart';
 
 // ─── Project Improver Screen ──────────────────────────────────────────────────
 
@@ -332,7 +337,7 @@ class SelectionBoosterScreen extends ConsumerStatefulWidget {
 
   const SelectionBoosterScreen({
     super.key,
-    required this.resumeText,
+    this.resumeText = '',
     this.jobTitle = '',
   });
 
@@ -347,9 +352,24 @@ class _SelectionBoosterScreenState
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
+      // Always prefer the live resume context over the passed-in text
+      final ctx = ref.read(resumeContextProvider);
+      final text = ctx.hasResume ? ctx.text : widget.resumeText;
+      final role = widget.jobTitle.isNotEmpty
+          ? widget.jobTitle
+          : (ctx.detectedRole.isNotEmpty ? ctx.detectedRole : '');
+
+      if (text.trim().length < 50) {
+        // No resume — show error
+        ref
+            .read(selectionBoosterProvider.notifier)
+            .setError('No resume detected. Please upload your resume first.');
+        return;
+      }
+
       ref
           .read(selectionBoosterProvider.notifier)
-          .analyze(resumeText: widget.resumeText, jobTitle: widget.jobTitle);
+          .analyze(resumeText: text, jobTitle: role);
     });
   }
 
@@ -523,7 +543,7 @@ class _BoosterSection extends StatelessWidget {
 
 // ─── Human Review Request Screen ──────────────────────────────────────────────
 
-class HumanReviewScreen extends ConsumerWidget {
+class HumanReviewScreen extends ConsumerStatefulWidget {
   final String userEmail;
   final String userName;
 
@@ -534,48 +554,166 @@ class HumanReviewScreen extends ConsumerWidget {
   });
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final unlocks = ref.watch(unlockProvider);
-    final isUnlocked = unlocks.contains('human_review');
+  ConsumerState<HumanReviewScreen> createState() => _HumanReviewScreenState();
+}
 
-    Future<void> handleRequest() async {
+class _HumanReviewScreenState extends ConsumerState<HumanReviewScreen> {
+  bool _isSubmitting = false;
+  bool _submitted = false;
+  String? _uploadedFileName;
+  String _resumeContent = ''; // resume text from context or upload
+  final _notesCtrl = TextEditingController();
+  final _targetRoleCtrl = TextEditingController();
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      // Pre-load resume text from context
+      final ctx = ref.read(resumeContextProvider);
+      if (ctx.hasResume) {
+        setState(() {
+          _resumeContent = ctx.text;
+          _uploadedFileName = 'Your uploaded resume (auto-detected)';
+        });
+      }
+    });
+  }
+
+  @override
+  void dispose() {
+    _notesCtrl.dispose();
+    _targetRoleCtrl.dispose();
+    super.dispose();
+  }
+
+  Future<void> _submitReviewRequest() async {
+    if (_resumeContent.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('⚠️ Please upload your resume first')),
+      );
+      return;
+    }
+
+    setState(() => _isSubmitting = true);
+
+    try {
+      final uid = FirebaseAuth.instance.currentUser?.uid ?? 'anonymous';
+      final targetRole = _targetRoleCtrl.text.trim();
+      final notes = _notesCtrl.text.trim();
+
+      // 1️⃣ Save to Firestore (admin backup)
+      await FirebaseFirestore.instance.collection('human_review_requests').add({
+        'userId': uid,
+        'userName': widget.userName,
+        'userEmail': widget.userEmail,
+        'targetRole': targetRole,
+        'additionalNotes': notes,
+        'resumeText': _resumeContent,
+        'status': 'pending',
+        'submittedAt': FieldValue.serverTimestamp(),
+        'fileName': _uploadedFileName ?? 'resume',
+      });
+
+      // 2️⃣ Send email to admin via EmailJS REST API
+      await _sendAdminEmail(
+        userName: widget.userName,
+        userEmail: widget.userEmail,
+        targetRole: targetRole,
+        notes: notes,
+        resumeText: _resumeContent,
+      );
+
+      if (mounted) {
+        setState(() {
+          _isSubmitting = false;
+          _submitted = true;
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() => _isSubmitting = false);
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Error submitting: $e')));
+      }
+    }
+  }
+
+  /// Sends a notification email to the admin using EmailJS public API.
+  /// Uses EmailJS service — free tier sends up to 200 emails/month.
+  Future<void> _sendAdminEmail({
+    required String userName,
+    required String userEmail,
+    required String targetRole,
+    required String notes,
+    required String resumeText,
+  }) async {
+    // Truncate resume text to first 3000 chars to stay within email size limits
+    final resumePreview = resumeText.length > 3000
+        ? '${resumeText.substring(0, 3000)}\n\n[...truncated — full text in Firestore...]'
+        : resumeText;
+
+    try {
+      final response = await http.post(
+        Uri.parse('https://api.emailjs.com/api/v1.0/email/send'),
+        headers: {
+          'Content-Type': 'application/json',
+          'origin': 'http://localhost',
+        },
+        body: jsonEncode({
+          'service_id': 'service_resumeapp', // set up in EmailJS dashboard
+          'template_id': 'template_humanreview', // set up in EmailJS dashboard
+          'user_id': 'YOUR_EMAILJS_PUBLIC_KEY', // replace with your public key
+          'template_params': {
+            'to_email': 'vasubansal741@gmail.com',
+            'to_name': 'Vasu',
+            'from_name': userName,
+            'from_email': userEmail,
+            'target_role': targetRole.isNotEmpty ? targetRole : 'Not specified',
+            'notes': notes.isNotEmpty ? notes : 'None',
+            'resume_text': resumePreview,
+            'submitted_at': DateTime.now().toString(),
+          },
+        }),
+      );
+
+      // EmailJS returns 200 with body "OK" on success
+      if (response.statusCode != 200) {
+        // Don't throw — Firestore save already worked. Just log.
+        debugPrint('EmailJS warning: ${response.statusCode} ${response.body}');
+      }
+    } catch (e) {
+      // Email failure is non-fatal — Firestore has the data
+      debugPrint('Email send error (non-fatal): $e');
+    }
+  }
+
+  Future<void> _handlePurchaseAndSubmit() async {
+    final unlocks = ref.read(unlockProvider);
+    final isUnlocked =
+        unlocks.contains('human_review') || unlocks.contains('bundle');
+
+    if (!isUnlocked) {
       final paid = await PaywallSheet.show(
         context,
         plan: PaymentPlan.humanReview,
-        userEmail: userEmail,
-        userName: userName,
+        userEmail: widget.userEmail,
+        userName: widget.userName,
       );
-      if (paid && context.mounted) {
-        await ref.read(unlockProvider.notifier).unlock('human_review');
-        // Show confirmation
-        if (context.mounted) {
-          showDialog(
-            context: context,
-            builder: (_) => AlertDialog(
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(16),
-              ),
-              title: const Row(
-                children: [
-                  Icon(Icons.check_circle, color: AppTheme.success),
-                  SizedBox(width: 8),
-                  Text('Request Submitted!'),
-                ],
-              ),
-              content: Text(
-                'Your payment is confirmed. Our expert will review your resume and send the improved version to $userEmail within 24 hours.',
-              ),
-              actions: [
-                ElevatedButton(
-                  onPressed: () => Navigator.pop(context),
-                  child: const Text('OK'),
-                ),
-              ],
-            ),
-          );
-        }
-      }
+      if (!paid || !mounted) return;
+      await ref.read(unlockProvider.notifier).unlock('human_review');
     }
+
+    if (mounted) await _submitReviewRequest();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final unlocks = ref.watch(unlockProvider);
+    final isUnlocked =
+        unlocks.contains('human_review') || unlocks.contains('bundle');
+    final isDark = Theme.of(context).brightness == Brightness.dark;
 
     return Scaffold(
       appBar: AppBar(title: const Text('Expert Human Review')),
@@ -610,7 +748,7 @@ class HumanReviewScreen extends ConsumerWidget {
                   ),
                   const SizedBox(height: 6),
                   Text(
-                    'Your resume gets manually reviewed and rewritten by an\nexperienced technical resume writer — in 24 hours.',
+                    'A real person personally reads and rewrites your resume.\nDelivered to your email within 24 hours.',
                     textAlign: TextAlign.center,
                     style: TextStyle(
                       color: Colors.grey[400],
@@ -621,52 +759,44 @@ class HumanReviewScreen extends ConsumerWidget {
                 ],
               ),
             ),
-            const SizedBox(height: 24),
+            const SizedBox(height: 20),
 
             // What you get
             const Text(
               'What you get:',
               style: TextStyle(fontWeight: FontWeight.w700, fontSize: 15),
             ),
-            const SizedBox(height: 14),
+            const SizedBox(height: 12),
             ...[
-              (
-                '👤',
-                'Human Expert',
-                'A real person with 5+ years of tech resume writing experience',
-              ),
+              ('👤', 'Real Expert', '5+ years experience writing tech resumes'),
               (
                 '⏱️',
-                '24 Hour Delivery',
-                'Improved resume sent to your email within 24 hours',
+                'Delivered in 24 Hours',
+                'Improved resume sent to your email by tomorrow',
               ),
               (
                 '✏️',
                 'Full Rewrite',
-                'Every section reviewed and improved for your target role',
+                'Every section improved — bullets, summary, skills',
               ),
-              (
-                '💬',
-                'Personal Feedback',
-                'Voice note or written feedback on your resume\'s gaps',
-              ),
+              ('💬', 'Written Feedback', 'Explanation of every change made'),
               (
                 '🔄',
                 'One Free Revision',
-                'One free edit round if you\'re not satisfied',
+                'Not happy? One free change round included',
               ),
               (
                 '🎯',
-                'LinkedIn Tip',
-                'Bonus: LinkedIn headline and About section suggestion',
+                'Bonus: LinkedIn Tips',
+                'Headline + About section suggestion',
               ),
             ].map(
               (item) => Padding(
-                padding: const EdgeInsets.only(bottom: 14),
+                padding: const EdgeInsets.only(bottom: 12),
                 child: Row(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(item.$1, style: const TextStyle(fontSize: 22)),
+                    Text(item.$1, style: const TextStyle(fontSize: 20)),
                     const SizedBox(width: 12),
                     Expanded(
                       child: Column(
@@ -676,7 +806,7 @@ class HumanReviewScreen extends ConsumerWidget {
                             item.$2,
                             style: const TextStyle(
                               fontWeight: FontWeight.w700,
-                              fontSize: 14,
+                              fontSize: 13,
                             ),
                           ),
                           Text(
@@ -693,35 +823,62 @@ class HumanReviewScreen extends ConsumerWidget {
                 ),
               ),
             ),
+            const SizedBox(height: 20),
 
-            if (isUnlocked) ...[
-              const SizedBox(height: 10),
+            if (_submitted) ...[
+              // ── SUCCESS STATE ──────────────────────────────────────────────
               Container(
-                padding: const EdgeInsets.all(16),
+                padding: const EdgeInsets.all(20),
                 decoration: BoxDecoration(
                   color: AppTheme.success.withOpacity(0.08),
-                  borderRadius: BorderRadius.circular(12),
+                  borderRadius: BorderRadius.circular(16),
                   border: Border.all(color: AppTheme.success.withOpacity(0.3)),
                 ),
-                child: const Row(
+                child: Column(
                   children: [
-                    Icon(Icons.check_circle, color: AppTheme.success),
-                    SizedBox(width: 12),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
+                    const Icon(
+                      Icons.check_circle,
+                      color: AppTheme.success,
+                      size: 48,
+                    ),
+                    const SizedBox(height: 12),
+                    const Text(
+                      'Request Submitted! ✅',
+                      style: TextStyle(
+                        fontWeight: FontWeight.w800,
+                        fontSize: 18,
+                        color: AppTheme.success,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      'Our expert has received your resume. The improved version will be sent to ${widget.userEmail} within 24 hours.',
+                      textAlign: TextAlign.center,
+                      style: const TextStyle(fontSize: 13, height: 1.5),
+                    ),
+                    const SizedBox(height: 12),
+                    Container(
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: AppTheme.success.withOpacity(0.06),
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      child: Row(
                         children: [
-                          Text(
-                            'Request Submitted!',
-                            style: TextStyle(
-                              fontWeight: FontWeight.w700,
-                              color: AppTheme.success,
-                            ),
+                          const Icon(
+                            Icons.info_outline,
+                            size: 16,
+                            color: AppTheme.success,
                           ),
-                          SizedBox(height: 4),
-                          Text(
-                            'Our expert will send your improved resume within 24 hours.',
-                            style: TextStyle(fontSize: 12),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Text(
+                              'Check your email inbox (and spam folder) tomorrow. If you don\'t receive it, contact support.',
+                              style: TextStyle(
+                                fontSize: 11,
+                                color: AppTheme.textSecondary,
+                              ),
+                            ),
                           ),
                         ],
                       ),
@@ -730,44 +887,213 @@ class HumanReviewScreen extends ConsumerWidget {
                 ),
               ),
             ] else ...[
-              const SizedBox(height: 24),
-              // Price
-              Container(
-                padding: const EdgeInsets.symmetric(
-                  vertical: 12,
-                  horizontal: 16,
-                ),
-                decoration: BoxDecoration(
-                  color: Colors.grey[100],
-                  borderRadius: BorderRadius.circular(10),
-                ),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    const Text(
-                      'Expert Human Review',
-                      style: TextStyle(fontWeight: FontWeight.w600),
-                    ),
-                    Text(
-                      PaymentPlan.humanReview.displayPrice,
-                      style: const TextStyle(
-                        fontWeight: FontWeight.w800,
-                        fontSize: 20,
-                        color: AppTheme.primary,
+              // ── UPLOAD / FORM STATE ────────────────────────────────────────
+
+              // Resume upload section
+              const Text(
+                'Step 1: Your Resume',
+                style: TextStyle(fontWeight: FontWeight.w700, fontSize: 14),
+              ),
+              const SizedBox(height: 8),
+
+              GestureDetector(
+                onTap: () async {
+                  // Use resume from context if available
+                  final ctx = ref.read(resumeContextProvider);
+                  if (ctx.hasResume && _resumeContent == ctx.text) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                        content: Text('✅ Using your already-uploaded resume!'),
+                      ),
+                    );
+                    return;
+                  }
+                  // Navigate user to upload screen if no resume
+                  Navigator.pop(context);
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text(
+                        'Please upload your resume from the Home screen first',
                       ),
                     ),
-                  ],
+                  );
+                },
+                child: Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    color: _uploadedFileName != null
+                        ? AppTheme.success.withOpacity(0.06)
+                        : (isDark
+                              ? const Color(0xFF1A1D27)
+                              : const Color(0xFFF9FAFB)),
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(
+                      color: _uploadedFileName != null
+                          ? AppTheme.success.withOpacity(0.4)
+                          : (isDark ? Colors.white24 : const Color(0xFFE5E7EB)),
+                      width: 1.5,
+                    ),
+                  ),
+                  child: Row(
+                    children: [
+                      Icon(
+                        _uploadedFileName != null
+                            ? Icons.check_circle
+                            : Icons.upload_file,
+                        color: _uploadedFileName != null
+                            ? AppTheme.success
+                            : AppTheme.textSecondary,
+                        size: 28,
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              _uploadedFileName ??
+                                  'Tap to use your uploaded resume',
+                              style: TextStyle(
+                                fontWeight: FontWeight.w600,
+                                fontSize: 13,
+                                color: _uploadedFileName != null
+                                    ? AppTheme.success
+                                    : AppTheme.textSecondary,
+                              ),
+                            ),
+                            if (_uploadedFileName == null)
+                              const Text(
+                                '(Upload your resume from Home screen first)',
+                                style: TextStyle(
+                                  fontSize: 11,
+                                  color: AppTheme.textSecondary,
+                                ),
+                              ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
               ),
               const SizedBox(height: 16),
+
+              // Target role
+              const Text(
+                'Step 2: What role are you applying for?',
+                style: TextStyle(fontWeight: FontWeight.w700, fontSize: 14),
+              ),
+              const SizedBox(height: 8),
+              TextField(
+                controller: _targetRoleCtrl,
+                decoration: InputDecoration(
+                  hintText:
+                      'e.g. Flutter Developer, Data Analyst, Product Manager',
+                  hintStyle: const TextStyle(
+                    fontSize: 12,
+                    color: AppTheme.textSecondary,
+                  ),
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  contentPadding: const EdgeInsets.symmetric(
+                    horizontal: 14,
+                    vertical: 12,
+                  ),
+                ),
+              ),
+              const SizedBox(height: 16),
+
+              // Additional notes
+              const Text(
+                'Step 3: Anything specific to improve? (Optional)',
+                style: TextStyle(fontWeight: FontWeight.w700, fontSize: 14),
+              ),
+              const SizedBox(height: 8),
+              TextField(
+                controller: _notesCtrl,
+                maxLines: 3,
+                decoration: InputDecoration(
+                  hintText:
+                      'e.g. "Make it better for startups" or "I have a gap year, please handle that"',
+                  hintStyle: const TextStyle(
+                    fontSize: 12,
+                    color: AppTheme.textSecondary,
+                  ),
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  contentPadding: const EdgeInsets.symmetric(
+                    horizontal: 14,
+                    vertical: 12,
+                  ),
+                ),
+              ),
+              const SizedBox(height: 24),
+
+              // Price card
+              if (!isUnlocked) ...[
+                Container(
+                  padding: const EdgeInsets.all(14),
+                  decoration: BoxDecoration(
+                    color: isDark ? const Color(0xFF1A1D27) : Colors.grey[50],
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(
+                      color: isDark ? Colors.white12 : const Color(0xFFE5E7EB),
+                    ),
+                  ),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      const Expanded(
+                        child: Text(
+                          'Expert Human Review\n(One-time, includes 1 revision)',
+                          style: TextStyle(
+                            fontWeight: FontWeight.w600,
+                            fontSize: 13,
+                          ),
+                        ),
+                      ),
+                      Text(
+                        PaymentPlan.humanReview.displayPrice,
+                        style: const TextStyle(
+                          fontWeight: FontWeight.w800,
+                          fontSize: 22,
+                          color: AppTheme.primary,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 12),
+              ],
+
+              // Submit button
               SizedBox(
                 width: double.infinity,
                 height: 54,
                 child: ElevatedButton.icon(
-                  onPressed: handleRequest,
-                  icon: const Icon(Icons.person_search, size: 20),
+                  onPressed: _isSubmitting ? null : _handlePurchaseAndSubmit,
+                  icon: _isSubmitting
+                      ? const SizedBox(
+                          width: 18,
+                          height: 18,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            color: Colors.white,
+                          ),
+                        )
+                      : Icon(
+                          isUnlocked ? Icons.send_rounded : Icons.person_search,
+                          size: 20,
+                        ),
                   label: Text(
-                    'Request Expert Review · ${PaymentPlan.humanReview.displayPrice}',
+                    _isSubmitting
+                        ? 'Submitting...'
+                        : isUnlocked
+                        ? 'Submit My Resume for Review'
+                        : 'Pay & Submit · ${PaymentPlan.humanReview.displayPrice}',
                   ),
                   style: ElevatedButton.styleFrom(
                     backgroundColor: AppTheme.textPrimary,
@@ -780,6 +1106,14 @@ class HumanReviewScreen extends ConsumerWidget {
                       borderRadius: BorderRadius.circular(14),
                     ),
                   ),
+                ),
+              ),
+              const SizedBox(height: 10),
+              const Center(
+                child: Text(
+                  '🔒 Your resume is kept confidential and only seen by our expert',
+                  style: TextStyle(fontSize: 11, color: AppTheme.textSecondary),
+                  textAlign: TextAlign.center,
                 ),
               ),
             ],

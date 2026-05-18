@@ -8,6 +8,7 @@ import '../../../core/constants/app_theme.dart';
 import '../../../core/services/payment_service.dart';
 import '../../../core/services/resume_pdf_service.dart';
 import '../../../providers/premium_providers.dart';
+import '../../../providers/resume_context_provider.dart';
 
 class JdOptimizeScreen extends ConsumerStatefulWidget {
   final String resumeText;
@@ -16,7 +17,7 @@ class JdOptimizeScreen extends ConsumerStatefulWidget {
 
   const JdOptimizeScreen({
     super.key,
-    required this.resumeText,
+    this.resumeText = '',
     required this.userName,
     required this.userEmail,
   });
@@ -59,12 +60,12 @@ class _JdOptimizeScreenState extends ConsumerState<JdOptimizeScreen>
       );
       return;
     }
+    final text = widget.resumeText.trim().length > 50
+        ? widget.resumeText
+        : ref.read(resumeContextProvider).text;
     ref
         .read(jdOptimizeProvider.notifier)
-        .optimize(
-          resumeText: widget.resumeText,
-          jobDescription: _jdController.text.trim(),
-        );
+        .optimize(resumeText: text, jobDescription: _jdController.text.trim());
   }
 
   Future<void> _handleUnlock() async {

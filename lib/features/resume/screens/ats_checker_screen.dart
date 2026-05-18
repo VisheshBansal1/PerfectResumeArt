@@ -9,6 +9,7 @@ import 'package:go_router/go_router.dart';
 import '../../../core/constants/app_theme.dart';
 import '../../../core/router/app_router.dart';
 import '../../../providers/providers.dart';
+import '../../../providers/resume_context_provider.dart';
 import 'package:dotted_border/dotted_border.dart';
 
 class AtsCheckerScreen extends ConsumerStatefulWidget {
@@ -79,10 +80,30 @@ class _AtsCheckerScreenState extends ConsumerState<AtsCheckerScreen> {
         _selectedFileName = null;
       });
       await ref.read(resumeUploadProvider.notifier).extractText(file);
+      // Save to global context
+      final extracted = ref.read(resumeUploadProvider).extractedText ?? '';
+      if (extracted.isNotEmpty) {
+        await ref
+            .read(resumeContextProvider.notifier)
+            .setResume(extracted, source: 'ats');
+      }
     }
   }
 
   Future<void> _runAtsCheck() async {
+    // If no new file but resume is in context, use it directly
+    final ctx = ref.read(resumeContextProvider);
+    if (_selectedFile == null && _selectedBytes == null && ctx.hasResume) {
+      final analysisId = await ref
+          .read(resumeUploadProvider.notifier)
+          .uploadAndAnalyzeAtsFromText(ctx.text);
+      if (analysisId != null && mounted) {
+        ref.invalidate(userAnalysesProvider);
+        context.go(AppRoutes.analysisResultWithId(analysisId));
+      }
+      return;
+    }
+
     if (kIsWeb) {
       if (_selectedBytes == null) return;
       final analysisId = await ref
@@ -120,7 +141,10 @@ class _AtsCheckerScreenState extends ConsumerState<AtsCheckerScreen> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             _buildHeader(),
-            const SizedBox(height: 24),
+            const SizedBox(height: 16),
+            // Show existing resume status
+            _buildResumeStatus(),
+            const SizedBox(height: 16),
             _buildWhatIsAts(),
             const SizedBox(height: 24),
             _buildChecklist(),
@@ -139,6 +163,72 @@ class _AtsCheckerScreenState extends ConsumerState<AtsCheckerScreen> {
             const SizedBox(height: 40),
           ],
         ),
+      ),
+    );
+  }
+
+  Widget _buildResumeStatus() {
+    final ctx = ref.watch(resumeContextProvider);
+    if (ctx.hasResume) {
+      return Container(
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          color: AppTheme.success.withOpacity(0.08),
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(color: AppTheme.success.withOpacity(0.3)),
+        ),
+        child: Row(
+          children: [
+            const Icon(Icons.check_circle, color: AppTheme.success, size: 18),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text(
+                    'Resume already loaded ✅',
+                    style: TextStyle(
+                      fontWeight: FontWeight.w700,
+                      fontSize: 12,
+                      color: AppTheme.success,
+                    ),
+                  ),
+                  Text(
+                    'Upload a new one below to re-check, or tap Run ATS Check directly',
+                    style: TextStyle(
+                      fontSize: 11,
+                      color: AppTheme.textSecondary,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: Colors.orange.withOpacity(0.08),
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: Colors.orange.withOpacity(0.3)),
+      ),
+      child: const Row(
+        children: [
+          Icon(Icons.info_outline, color: Colors.orange, size: 18),
+          SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              'Upload your resume PDF below to run the ATS check',
+              style: TextStyle(
+                fontSize: 12,
+                color: Colors.orange,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -382,39 +472,45 @@ class _AtsCheckerScreenState extends ConsumerState<AtsCheckerScreen> {
     ),
   );
 
-  Widget _buildRunButton(dynamic uploadState) => SizedBox(
-    width: double.infinity,
-    child: ElevatedButton.icon(
-      onPressed:
-          (_selectedFile != null || _selectedBytes != null) &&
-              !uploadState.isLoading
-          ? _runAtsCheck
-          : null,
-      style: ElevatedButton.styleFrom(
-        backgroundColor: Colors.purple,
-        foregroundColor: Colors.white,
+  Widget _buildRunButton(dynamic uploadState) {
+    final hasContext = ref.read(resumeContextProvider).hasResume;
+    final hasFile = _selectedFile != null || _selectedBytes != null;
+    final canRun = (hasFile || hasContext) && !uploadState.isLoading;
+
+    return SizedBox(
+      width: double.infinity,
+      child: ElevatedButton.icon(
+        onPressed: canRun ? _runAtsCheck : null,
+        style: ElevatedButton.styleFrom(
+          backgroundColor: Colors.purple,
+          foregroundColor: Colors.white,
+          padding: const EdgeInsets.symmetric(vertical: 14),
+        ),
+        icon: uploadState.isLoading
+            ? const SizedBox(
+                height: 18,
+                width: 18,
+                child: CircularProgressIndicator(
+                  color: Colors.white,
+                  strokeWidth: 2,
+                ),
+              )
+            : const Icon(Icons.fact_check_outlined),
+        label: Text(
+          uploadState.isExtracting
+              ? 'Reading resume...'
+              : uploadState.isUploading
+              ? 'Uploading...'
+              : uploadState.isAnalyzing
+              ? 'Running ATS check...'
+              : hasContext && !hasFile
+              ? 'Re-run ATS Check on Your Resume'
+              : 'Run ATS Check',
+          style: const TextStyle(fontWeight: FontWeight.w700),
+        ),
       ),
-      icon: uploadState.isLoading
-          ? const SizedBox(
-              height: 18,
-              width: 18,
-              child: CircularProgressIndicator(
-                color: Colors.white,
-                strokeWidth: 2,
-              ),
-            )
-          : const Icon(Icons.fact_check_outlined),
-      label: Text(
-        uploadState.isExtracting
-            ? 'Reading resume...'
-            : uploadState.isUploading
-            ? 'Uploading...'
-            : uploadState.isAnalyzing
-            ? 'Running ATS check...'
-            : 'Run ATS Check',
-      ),
-    ),
-  );
+    );
+  }
 
   Widget _buildError(String error) => Container(
     margin: const EdgeInsets.only(top: 12),

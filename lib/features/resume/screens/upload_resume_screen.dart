@@ -10,6 +10,7 @@ import '../../../core/constants/app_theme.dart';
 import '../../../core/router/app_router.dart';
 import '../../../models/models.dart';
 import '../../../providers/providers.dart';
+import '../../../providers/resume_context_provider.dart';
 import '../../job_roles/screens/job_selection_screen.dart';
 import 'package:dotted_border/dotted_border.dart';
 
@@ -511,6 +512,12 @@ class _UploadResumeScreenState extends ConsumerState<UploadResumeScreen>
         });
         ref.read(resumeUploadProvider.notifier).clearError();
         await ref.read(resumeUploadProvider.notifier).extractText(file);
+        final txt = ref.read(resumeUploadProvider).extractedText ?? '';
+        if (txt.isNotEmpty) {
+          await ref
+              .read(resumeContextProvider.notifier)
+              .setResume(txt, source: 'upload');
+        }
       }
     } catch (e) {
       _showError('Could not open the file. Please try a different file.');
