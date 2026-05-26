@@ -15,11 +15,11 @@ class RegisterScreen extends ConsumerStatefulWidget {
 }
 
 class _RegisterScreenState extends ConsumerState<RegisterScreen> {
-  final _formKey      = GlobalKey<FormState>();
-  final _nameCtrl     = TextEditingController();
-  final _emailCtrl    = TextEditingController();
+  final _formKey = GlobalKey<FormState>();
+  final _nameCtrl = TextEditingController();
+  final _emailCtrl = TextEditingController();
   final _passwordCtrl = TextEditingController();
-  bool _obscure       = true;
+  bool _obscure = true;
 
   @override
   void dispose() {
@@ -31,11 +31,13 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
 
   Future<void> _register() async {
     if (!_formKey.currentState!.validate()) return;
-    final user = await ref.read(authNotifierProvider.notifier).register(
-      email:    _emailCtrl.text.trim(),
-      password: _passwordCtrl.text,
-      name:     _nameCtrl.text.trim(),
-    );
+    final user = await ref
+        .read(authNotifierProvider.notifier)
+        .register(
+          email: _emailCtrl.text.trim(),
+          password: _passwordCtrl.text,
+          name: _nameCtrl.text.trim(),
+        );
     if (user != null && mounted) context.go(AppRoutes.home);
   }
 
@@ -58,8 +60,10 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             // ── Google Sign-Up (fastest path) ─────────────────
-            const Text('Quickest way to get started:',
-                style: TextStyle(fontSize: 13, color: Colors.grey)),
+            const Text(
+              'Quickest way to get started:',
+              style: TextStyle(fontSize: 13, color: Colors.grey),
+            ),
             const SizedBox(height: 10),
             GoogleSignInButton(
               isLoading: authState.isGoogleLoading,
@@ -70,63 +74,71 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
             const SizedBox(height: 20),
 
             // ── Divider ───────────────────────────────────────
-            Row(children: [
-              const Expanded(child: Divider()),
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 12),
-                child: Text('or register with email',
-                    style: TextStyle(color: Colors.grey[500], fontSize: 12)),
-              ),
-              const Expanded(child: Divider()),
-            ]),
+            Row(
+              children: [
+                const Expanded(child: Divider()),
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 12),
+                  child: Text(
+                    'or register with email',
+                    style: TextStyle(color: Colors.grey[500], fontSize: 12),
+                  ),
+                ),
+                const Expanded(child: Divider()),
+              ],
+            ),
             const SizedBox(height: 20),
 
             // ── Email form ────────────────────────────────────
             Form(
               key: _formKey,
-              child: Column(children: [
-                TextFormField(
-                  controller: _nameCtrl,
-                  textCapitalization: TextCapitalization.words,
-                  decoration: const InputDecoration(
-                    labelText: 'Full name',
-                    prefixIcon: Icon(Icons.person_outline),
-                  ),
-                  validator: (v) => v == null || v.trim().isEmpty
-                      ? 'Enter your name'
-                      : null,
-                ),
-                const SizedBox(height: 14),
-                TextFormField(
-                  controller: _emailCtrl,
-                  keyboardType: TextInputType.emailAddress,
-                  decoration: const InputDecoration(
-                    labelText: 'Email address',
-                    prefixIcon: Icon(Icons.email_outlined),
-                  ),
-                  validator: (v) => v == null || !v.contains('@')
-                      ? 'Enter a valid email'
-                      : null,
-                ),
-                const SizedBox(height: 14),
-                TextFormField(
-                  controller: _passwordCtrl,
-                  obscureText: _obscure,
-                  decoration: InputDecoration(
-                    labelText: 'Password',
-                    prefixIcon: const Icon(Icons.lock_outline),
-                    suffixIcon: IconButton(
-                      icon: Icon(_obscure
-                          ? Icons.visibility_outlined
-                          : Icons.visibility_off_outlined),
-                      onPressed: () => setState(() => _obscure = !_obscure),
+              child: Column(
+                children: [
+                  TextFormField(
+                    controller: _nameCtrl,
+                    textCapitalization: TextCapitalization.words,
+                    decoration: const InputDecoration(
+                      labelText: 'Full name',
+                      prefixIcon: Icon(Icons.person_outline),
                     ),
+                    validator: (v) => v == null || v.trim().isEmpty
+                        ? 'Enter your name'
+                        : null,
                   ),
-                  validator: (v) => v == null || v.length < 6
-                      ? 'Minimum 6 characters'
-                      : null,
-                ),
-              ]),
+                  const SizedBox(height: 14),
+                  TextFormField(
+                    controller: _emailCtrl,
+                    keyboardType: TextInputType.emailAddress,
+                    decoration: const InputDecoration(
+                      labelText: 'Email address',
+                      prefixIcon: Icon(Icons.email_outlined),
+                    ),
+                    validator: (v) => v == null || !v.contains('@')
+                        ? 'Enter a valid email'
+                        : null,
+                  ),
+                  const SizedBox(height: 14),
+                  TextFormField(
+                    controller: _passwordCtrl,
+                    obscureText: _obscure,
+                    decoration: InputDecoration(
+                      labelText: 'Password',
+                      prefixIcon: const Icon(Icons.lock_outline),
+                      suffixIcon: IconButton(
+                        icon: Icon(
+                          _obscure
+                              ? Icons.visibility_outlined
+                              : Icons.visibility_off_outlined,
+                        ),
+                        onPressed: () => setState(() => _obscure = !_obscure),
+                      ),
+                    ),
+                    validator: (v) => v == null || v.length < 6
+                        ? 'Minimum 6 characters'
+                        : null,
+                  ),
+                ],
+              ),
             ),
             const SizedBox(height: 20),
 
@@ -142,16 +154,25 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
                   backgroundColor: AppTheme.primary,
                   foregroundColor: Colors.white,
                   shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12)),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
                 ),
                 child: authState.isLoading
                     ? const SizedBox(
-                        height: 20, width: 20,
+                        height: 20,
+                        width: 20,
                         child: CircularProgressIndicator(
-                            color: Colors.white, strokeWidth: 2))
-                    : const Text('Create Account',
+                          color: Colors.white,
+                          strokeWidth: 2,
+                        ),
+                      )
+                    : const Text(
+                        'Create Account',
                         style: TextStyle(
-                            fontSize: 15, fontWeight: FontWeight.w600)),
+                          fontSize: 15,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
               ),
             ),
 
@@ -164,15 +185,20 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
             Row(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                Text('Already have an account? ',
-                    style: TextStyle(color: Colors.grey[600], fontSize: 14)),
+                Text(
+                  'Already have an account? ',
+                  style: TextStyle(color: Colors.grey[600], fontSize: 14),
+                ),
                 GestureDetector(
                   onTap: () => context.go(AppRoutes.login),
-                  child: Text('Sign in',
-                      style: TextStyle(
-                          color: AppTheme.primary,
-                          fontWeight: FontWeight.w600,
-                          fontSize: 14)),
+                  child: Text(
+                    'Sign in',
+                    style: TextStyle(
+                      color: AppTheme.primary,
+                      fontWeight: FontWeight.w600,
+                      fontSize: 14,
+                    ),
+                  ),
                 ),
               ],
             ),

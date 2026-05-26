@@ -34,7 +34,7 @@ class ResumeAnalyzerApp extends ConsumerWidget {
     final router = ref.watch(appRouterProvider);
 
     return MaterialApp.router(
-      title: 'AI Resume Analyzer',
+      title: 'Perfect Resume Art',
 
       debugShowCheckedModeBanner: false,
 

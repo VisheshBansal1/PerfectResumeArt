@@ -1,3 +1,5 @@
+import 'dart:typed_data';
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:http_parser/http_parser.dart';
@@ -563,8 +565,14 @@ class _HumanReviewScreenState extends ConsumerState<HumanReviewScreen> {
   bool _isSubmitting = false;
   bool _submitted = false;
   String? _uploadedFileName;
-  String _resumeContent = ''; // resume text from context or upload
-  final _notesCtrl = TextEditingController();
+  String _resumeContent = '';
+
+  // PDF bytes picked directly in this screen — takes priority over provider bytes.
+  // Needed when user uploaded via ATS screen (which doesn't store bytes).
+  Uint8List? _localPdfBytes;
+  String? _localPdfName;
+
+  final _notesCtrl      = TextEditingController();
   final _targetRoleCtrl = TextEditingController();
 
   @override
@@ -646,11 +654,11 @@ class _HumanReviewScreenState extends ConsumerState<HumanReviewScreen> {
       final notes = _notesCtrl.text.trim();
 
       await _sendToBackend(
-        userName: widget.userName,
-        userEmail: widget.userEmail,
-        targetRole: targetRole,
-        notes: notes,
-        resumeText: _resumeContent,
+        userName:    widget.userName,
+        userEmail:   widget.userEmail,
+        targetRole:  targetRole,
+        notes:       notes,
+        resumeText:  _resumeContent,
       );
     } catch (e) {
       emailError = friendlyError(e);
@@ -678,9 +686,7 @@ class _HumanReviewScreenState extends ConsumerState<HumanReviewScreen> {
       } else {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text(
-              '✅ Request submitted! Admin notified with your resume.',
-            ),
+            content: Text('✅ Request submitted! Admin notified with your resume.'),
             backgroundColor: AppTheme.success,
             duration: Duration(seconds: 3),
           ),
@@ -689,15 +695,39 @@ class _HumanReviewScreenState extends ConsumerState<HumanReviewScreen> {
     }
   }
 
-  /// Sends the human review request to the backend as multipart/form-data.
-  ///
-  /// The backend endpoint (POST /api/human-review/submit):
-  ///   • Receives form fields: userName, userEmail, targetRole, notes, resumeText
-  ///   • Receives optional file field: 'resume' (PDF bytes)
-  ///   • Sends admin an email with the PDF as an actual attachment via Nodemailer
-  ///   • No Firebase Storage needed — bytes go Flutter → backend → Gmail
-  ///
-  /// Falls back gracefully if PDF bytes are not in memory (app was restarted).
+
+  /// Lets user pick a PDF specifically for the Human Review email attachment.
+  /// Needed when resume was uploaded via ATS screen (bytes not in provider).
+  Future<void> _pickPdf() async {
+    try {
+      final result = await FilePicker.platform.pickFiles(
+        type: FileType.custom,
+        allowedExtensions: ['pdf'],
+        withData: true,
+      );
+      if (result == null || result.files.isEmpty) return;
+      final file = result.files.single;
+      if (file.bytes == null || file.bytes!.isEmpty) return;
+
+      setState(() {
+        _localPdfBytes = Uint8List.fromList(file.bytes!);
+        _localPdfName  = file.name;
+      });
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('✅ PDF selected: ${file.name}'),
+            backgroundColor: AppTheme.success,
+            duration: const Duration(seconds: 2),
+          ),
+        );
+      }
+    } catch (e) {
+      debugPrint('[HumanReview] PDF pick error: $e');
+    }
+  }
+
   Future<void> _sendToBackend({
     required String userName,
     required String userEmail,
@@ -714,56 +744,42 @@ class _HumanReviewScreenState extends ConsumerState<HumanReviewScreen> {
       final request = http.MultipartRequest('POST', uri);
 
       // ── Form fields ──────────────────────────────────────────────────────
-      request.fields['userName'] = userName;
-      request.fields['userEmail'] = userEmail;
-      request.fields['targetRole'] = targetRole.isNotEmpty
-          ? targetRole
-          : 'Not specified';
-      request.fields['notes'] = notes.isNotEmpty ? notes : 'None';
+      request.fields['userName']   = userName;
+      request.fields['userEmail']  = userEmail;
+      request.fields['targetRole'] = targetRole.isNotEmpty ? targetRole : 'Not specified';
+      request.fields['notes']      = notes.isNotEmpty ? notes : 'None';
       // Include full resume text as backup (shown in email if PDF is missing)
       request.fields['resumeText'] = resumeText;
 
-      // ── PDF attachment (from in-memory bytes) ────────────────────────────
-      // pdfBytes are stored in resumeContextProvider when user uploads resume.
-      // They live in RAM — cleared when app closes. If null, email is sent
-      // without attachment (resume text preview is still included in email).
-      final ctx = ref.read(resumeContextProvider);
-      if (ctx.hasPdf) {
-        final fileName = ctx.fileName.isNotEmpty ? ctx.fileName : 'resume.pdf';
+      // ── PDF attachment ────────────────────────────────────────────────────
+      // Priority: 1) locally picked PDF in this screen
+      //           2) bytes stored in provider (from Premium Hub upload)
+      //           3) no PDF — text-only email
+      final ctx        = ref.read(resumeContextProvider);
+      final pdfBytes   = _localPdfBytes ?? (ctx.hasPdf ? ctx.pdfBytes : null);
+      final pdfName    = _localPdfName  ?? (ctx.fileName.isNotEmpty ? ctx.fileName : 'resume.pdf');
+
+      if (pdfBytes != null && pdfBytes.isNotEmpty) {
         request.files.add(
           http.MultipartFile.fromBytes(
-            'resume', // must match multer field name on backend
-            ctx.pdfBytes!,
-            filename: fileName,
+            'resume',
+            pdfBytes,
+            filename:    pdfName,
             contentType: MediaType('application', 'pdf'),
           ),
         );
-        debugPrint(
-          '[HumanReview] PDF attached: $fileName (${ctx.pdfBytes!.length} bytes)',
-        );
+        debugPrint('[HumanReview] PDF attached: $pdfName (${pdfBytes.length} bytes)');
       } else {
-        debugPrint('[HumanReview] No PDF bytes in memory — sending text-only');
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text(
-                '📝 Sending without PDF — re-upload resume for better results',
-              ),
-              duration: Duration(seconds: 4),
-            ),
-          );
-        }
+        debugPrint('[HumanReview] No PDF bytes — sending text-only');
       }
 
       // ── Send request ─────────────────────────────────────────────────────
-      final streamedResponse = await request.send().timeout(
-        const Duration(seconds: 30),
-      );
+      final streamedResponse = await request
+          .send()
+          .timeout(const Duration(seconds: 30));
 
       final response = await http.Response.fromStream(streamedResponse);
-      debugPrint(
-        '[HumanReview] Response ${response.statusCode}: ${response.body}',
-      );
+      debugPrint('[HumanReview] Response ${response.statusCode}: ${response.body}');
 
       if (response.statusCode != 200) {
         debugPrint('[HumanReview] Backend error: ${response.body}');
@@ -1067,6 +1083,14 @@ class _HumanReviewScreenState extends ConsumerState<HumanReviewScreen> {
               ),
               const SizedBox(height: 16),
 
+              // PDF attach — Step 1.5 between resume display and role
+              _PdfAttachButton(
+                localPdfName: _localPdfName,
+                hasPdfInProvider: ref.watch(resumeContextProvider).hasPdf,
+                onTap: _pickPdf,
+              ),
+              const SizedBox(height: 16),
+
               // Target role
               const Text(
                 'Step 2: What role are you applying for?',
@@ -1206,6 +1230,88 @@ class _HumanReviewScreenState extends ConsumerState<HumanReviewScreen> {
               ),
             ],
             const SizedBox(height: 40),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+
+// ── PDF Attach Button for Human Review ───────────────────────────────────────
+
+class _PdfAttachButton extends StatelessWidget {
+  final String? localPdfName;
+  final bool hasPdfInProvider;
+  final VoidCallback onTap;
+
+  const _PdfAttachButton({
+    required this.localPdfName,
+    required this.hasPdfInProvider,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final hasAnyPdf = localPdfName != null || hasPdfInProvider;
+
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+        decoration: BoxDecoration(
+          color: hasAnyPdf
+              ? AppTheme.success.withOpacity(0.08)
+              : Colors.white.withOpacity(0.05),
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(
+            color: hasAnyPdf
+                ? AppTheme.success.withOpacity(0.4)
+                : Colors.white.withOpacity(0.15),
+          ),
+        ),
+        child: Row(
+          children: [
+            Icon(
+              hasAnyPdf ? Icons.picture_as_pdf : Icons.attach_file,
+              color: hasAnyPdf ? AppTheme.success : Colors.white54,
+              size: 20,
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    hasAnyPdf ? 'PDF Ready to Send' : 'Attach Your Resume PDF',
+                    style: TextStyle(
+                      color: hasAnyPdf ? AppTheme.success : Colors.white,
+                      fontWeight: FontWeight.w600,
+                      fontSize: 13,
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    localPdfName != null
+                        ? localPdfName!
+                        : hasPdfInProvider
+                            ? 'Using your uploaded resume'
+                            : 'Tap to attach PDF — admin will receive it by email',
+                    style: const TextStyle(
+                      color: Colors.white54,
+                      fontSize: 11,
+                    ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ],
+              ),
+            ),
+            Icon(
+              hasAnyPdf ? Icons.check_circle : Icons.upload_file,
+              color: hasAnyPdf ? AppTheme.success : Colors.white30,
+              size: 18,
+            ),
           ],
         ),
       ),

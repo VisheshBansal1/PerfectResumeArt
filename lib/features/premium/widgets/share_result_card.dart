@@ -161,12 +161,19 @@ class _ShareCardSheetState extends State<_ShareCardSheet> {
                   ),
                   child: const Row(
                     children: [
-                      Icon(Icons.info_outline, size: 16, color: AppTheme.primary),
+                      Icon(
+                        Icons.info_outline,
+                        size: 16,
+                        color: AppTheme.primary,
+                      ),
                       SizedBox(width: 8),
                       Expanded(
                         child: Text(
                           'Take a screenshot of the card above and share it on WhatsApp or LinkedIn!',
-                          style: TextStyle(fontSize: 12, color: AppTheme.primary),
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: AppTheme.primary,
+                          ),
                         ),
                       ),
                     ],
@@ -179,10 +186,7 @@ class _ShareCardSheetState extends State<_ShareCardSheet> {
                   width: double.infinity,
                   child: OutlinedButton.icon(
                     onPressed: _copyShareText,
-                    icon: Icon(
-                      _copied ? Icons.check : Icons.copy,
-                      size: 16,
-                    ),
+                    icon: Icon(_copied ? Icons.check : Icons.copy, size: 16),
                     label: Text(
                       _copied ? 'Copied!' : 'Copy share text for caption',
                     ),
@@ -203,7 +207,7 @@ class _ShareCardSheetState extends State<_ShareCardSheet> {
         '🚀 Just improved my resume score from ${widget.scoreBefore}% to ${widget.scoreAfter}% '
         '(+$improvement%) using AI!\n\n'
         '✅ ${widget.highlight}\n\n'
-        'Used "${widget.toolName}" on Next Hire app 🔥\n'
+        'Used "${widget.toolName}" on Perfect Resume Art app 🔥\n'
         '#Resume #JobHunt #CareerTips';
     Clipboard.setData(ClipboardData(text: text));
     setState(() => _copied = true);
@@ -240,9 +244,7 @@ class _ShareCard extends StatelessWidget {
           end: Alignment.bottomRight,
         ),
         borderRadius: BorderRadius.circular(20),
-        border: Border.all(
-          color: const Color(0xFF2D5BE3).withOpacity(0.4),
-        ),
+        border: Border.all(color: const Color(0xFF2D5BE3).withOpacity(0.4)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -282,7 +284,7 @@ class _ShareCard extends StatelessWidget {
                   borderRadius: BorderRadius.circular(6),
                 ),
                 child: const Text(
-                  'Next Hire',
+                  'Perfect Resume Art',
                   style: TextStyle(
                     color: Color(0xFF2D5BE3),
                     fontSize: 10,
@@ -316,7 +318,9 @@ class _ShareCard extends StatelessWidget {
                     const SizedBox(height: 4),
                     Container(
                       padding: const EdgeInsets.symmetric(
-                          horizontal: 6, vertical: 2),
+                        horizontal: 6,
+                        vertical: 2,
+                      ),
                       decoration: BoxDecoration(
                         color: AppTheme.success.withOpacity(0.2),
                         borderRadius: BorderRadius.circular(4),
@@ -354,7 +358,11 @@ class _ShareCard extends StatelessWidget {
             ),
             child: Row(
               children: [
-                const Icon(Icons.check_circle, color: AppTheme.success, size: 16),
+                const Icon(
+                  Icons.check_circle,
+                  color: AppTheme.success,
+                  size: 16,
+                ),
                 const SizedBox(width: 8),
                 Expanded(
                   child: Text(
