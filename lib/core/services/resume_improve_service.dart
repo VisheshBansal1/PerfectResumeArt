@@ -1,6 +1,6 @@
 import 'dart:convert';
 import 'package:http/http.dart' as http;
-import 'package:flutter_dotenv/flutter_dotenv.dart';
+import 'package:next_hire/core/services/app_config.dart';
 
 /// Holds the fully improved resume with before/after data + ATS scores
 class ImprovedResume {
@@ -279,9 +279,9 @@ class ProjectEntry {
 
 // ─── Service ───────────────────────────────────────────────────────────────────
 class ResumeImproveService {
-  static String get _apiKey => dotenv.env['GROQ_API_KEY'] ?? '';
-  static const String _baseUrl =
-      'https://api.groq.com/openai/v1/chat/completions';
+  // GROQ_API_KEY removed — AI calls proxy through backend.
+  // See AiService._callGroq() which posts to AppConfig.backendUrl/api/ai/chat
+  // Calls backend proxy → backend calls Groq with server-side API key
   static const String _model = 'llama-3.3-70b-versatile';
 
   // ── 1. Fix My Resume — full rewrite ────────────────────────────────────────
@@ -698,33 +698,40 @@ Return ONLY valid JSON (no markdown, no explanation):
   }
 
   // ── Internal helpers ───────────────────────────────────────────────────────
+  // Posts to backend /api/ai/chat — backend calls Groq with server-side key.
+  // GROQ_API_KEY never sent to browser.
   Future<String> _call(String prompt, {required int maxTokens}) async {
-    if (_apiKey.isEmpty) throw Exception('GROQ_API_KEY not set in .env');
+    final backendUrl = AppConfig.backendUrl;
+    if (backendUrl.isEmpty) {
+      throw Exception(
+        'Backend URL not configured. Pass --dart-define=BACKEND_URL=...',
+      );
+    }
 
     final response = await http
         .post(
-          Uri.parse(_baseUrl),
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': 'Bearer $_apiKey',
-          },
+          Uri.parse('$backendUrl/api/ai/chat'),
+          headers: {'Content-Type': 'application/json'},
           body: jsonEncode({
+            'prompt': prompt,
             'model': _model,
-            'messages': [
-              {'role': 'user', 'content': prompt},
-            ],
-            'temperature': 0.15,
-            'max_tokens': maxTokens,
-            'stream': false,
+            'maxTokens': maxTokens,
           }),
         )
-        .timeout(const Duration(seconds: 90));
+        .timeout(const Duration(seconds: 95));
 
     if (response.statusCode != 200) {
-      throw Exception('Groq API error ${response.statusCode}');
+      final body = jsonDecode(response.body) as Map<String, dynamic>;
+      throw Exception(
+        body['error'] ?? 'AI service error ${response.statusCode}',
+      );
     }
+
     final data = jsonDecode(response.body) as Map<String, dynamic>;
-    return data['choices']?[0]?['message']?['content'] as String? ?? '';
+    if (data['success'] != true) {
+      throw Exception(data['error'] ?? 'AI service error');
+    }
+    return data['content'] as String? ?? '';
   }
 
   Map<String, dynamic> _decode(String raw) {

@@ -272,7 +272,11 @@ class _CandidateDetailScreenState extends ConsumerState<CandidateDetailScreen> {
     children: [
       const Text(
         'Missing Skills',
-        style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: Colors.black),
+        style: TextStyle(
+          fontSize: 15,
+          fontWeight: FontWeight.w600,
+          color: Colors.black,
+        ),
       ),
       const SizedBox(height: 8),
       Text(
@@ -319,7 +323,11 @@ class _CandidateDetailScreenState extends ConsumerState<CandidateDetailScreen> {
     children: [
       const Text(
         'Project Evaluation',
-        style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: Colors.black),
+        style: TextStyle(
+          fontSize: 15,
+          fontWeight: FontWeight.w600,
+          color: Colors.black,
+        ),
       ),
       const SizedBox(height: 10),
       ...analysis.projects.map((p) => _ProjectTile(project: p)),
@@ -403,7 +411,11 @@ class _CandidateDetailScreenState extends ConsumerState<CandidateDetailScreen> {
           const SizedBox(width: 8),
           const Text(
             'Your Decision',
-            style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600, color: Colors.black38),
+            style: TextStyle(
+              fontSize: 16,
+              fontWeight: FontWeight.w600,
+              color: Colors.black38,
+            ),
           ),
           const Spacer(),
           if (analysis.adminDecision != null)
@@ -729,7 +741,13 @@ class _ListSection extends StatelessWidget {
                     ),
                     const SizedBox(width: 6),
                     Expanded(
-                      child: Text(item, style: const TextStyle(fontSize: 11, color: Colors.black)),
+                      child: Text(
+                        item,
+                        style: const TextStyle(
+                          fontSize: 11,
+                          color: Colors.black,
+                        ),
+                      ),
                     ),
                   ],
                 ),

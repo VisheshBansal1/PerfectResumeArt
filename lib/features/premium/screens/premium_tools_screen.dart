@@ -1,12 +1,14 @@
-import 'dart:convert';
 import 'package:flutter/material.dart';
+import 'package:http/http.dart' as http;
+import 'package:http_parser/http_parser.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:http/http.dart' as http;
 
 import '../../../core/constants/app_theme.dart';
+import '../../../core/utils/error_utils.dart';
+import '../../../core/services/app_config.dart';
 import '../../../core/services/resume_improve_service.dart';
 import '../../../core/services/payment_service.dart';
 import '../../../providers/premium_providers.dart';
@@ -597,12 +599,18 @@ class _HumanReviewScreenState extends ConsumerState<HumanReviewScreen> {
 
     setState(() => _isSubmitting = true);
 
+    String? firestoreError;
+    String? emailError;
+
+    // ── Step 1: Save to Firestore ─────────────────────────────────────────────
+    // Always save first — this is the permanent record of the request.
+    // Even if email fails, admin can find the request in Firestore.
     try {
       final uid = FirebaseAuth.instance.currentUser?.uid ?? 'anonymous';
       final targetRole = _targetRoleCtrl.text.trim();
       final notes = _notesCtrl.text.trim();
+      final slaDeadline = DateTime.now().add(const Duration(hours: 20));
 
-      // 1️⃣ Save to Firestore (admin backup)
       await FirebaseFirestore.instance.collection('human_review_requests').add({
         'userId': uid,
         'userName': widget.userName,
@@ -613,79 +621,159 @@ class _HumanReviewScreenState extends ConsumerState<HumanReviewScreen> {
         'status': 'pending',
         'submittedAt': FieldValue.serverTimestamp(),
         'fileName': _uploadedFileName ?? 'resume',
+        'slaDeadline': Timestamp.fromDate(slaDeadline),
+        'reminderSent': false,
       });
+    } catch (e) {
+      // Firestore failed — stop here, don't show success
+      if (mounted) {
+        setState(() => _isSubmitting = false);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Failed to submit request: ${friendlyError(e)}'),
+            backgroundColor: AppTheme.error,
+          ),
+        );
+      }
+      return;
+    }
 
-      // 2️⃣ Send email to admin via EmailJS REST API
-      await _sendAdminEmail(
+    // ── Step 2: Send email via backend (PDF attached) ─────────────────────────
+    // Firestore succeeded — now try to send the email.
+    // Show a "sending email..." indicator so user knows it's working.
+    try {
+      final targetRole = _targetRoleCtrl.text.trim();
+      final notes = _notesCtrl.text.trim();
+
+      await _sendToBackend(
         userName: widget.userName,
         userEmail: widget.userEmail,
         targetRole: targetRole,
         notes: notes,
         resumeText: _resumeContent,
       );
-
-      if (mounted) {
-        setState(() {
-          _isSubmitting = false;
-          _submitted = true;
-        });
-      }
     } catch (e) {
-      if (mounted) {
-        setState(() => _isSubmitting = false);
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text('Error submitting: $e')));
+      emailError = friendlyError(e);
+    }
+
+    // ── Step 3: Show result ───────────────────────────────────────────────────
+    if (mounted) {
+      setState(() {
+        _isSubmitting = false;
+        _submitted = true; // Always mark submitted — Firestore record exists
+      });
+
+      if (emailError != null) {
+        // Firestore saved but email failed — show warning, not full error
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: const Text(
+              '⚠️ Request saved but email notification failed. '
+              'Admin will still see your request in the system.',
+            ),
+            backgroundColor: Colors.orange[700],
+            duration: const Duration(seconds: 5),
+          ),
+        );
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text(
+              '✅ Request submitted! Admin notified with your resume.',
+            ),
+            backgroundColor: AppTheme.success,
+            duration: Duration(seconds: 3),
+          ),
+        );
       }
     }
   }
 
-  /// Sends a notification email to the admin using EmailJS public API.
-  /// Uses EmailJS service — free tier sends up to 200 emails/month.
-  Future<void> _sendAdminEmail({
+  /// Sends the human review request to the backend as multipart/form-data.
+  ///
+  /// The backend endpoint (POST /api/human-review/submit):
+  ///   • Receives form fields: userName, userEmail, targetRole, notes, resumeText
+  ///   • Receives optional file field: 'resume' (PDF bytes)
+  ///   • Sends admin an email with the PDF as an actual attachment via Nodemailer
+  ///   • No Firebase Storage needed — bytes go Flutter → backend → Gmail
+  ///
+  /// Falls back gracefully if PDF bytes are not in memory (app was restarted).
+  Future<void> _sendToBackend({
     required String userName,
     required String userEmail,
     required String targetRole,
     required String notes,
     required String resumeText,
   }) async {
-    // Truncate resume text to first 3000 chars to stay within email size limits
-    final resumePreview = resumeText.length > 3000
-        ? '${resumeText.substring(0, 3000)}\n\n[...truncated — full text in Firestore...]'
-        : resumeText;
+    final backendUrl = AppConfig.backendUrl;
+    final uri = Uri.parse('$backendUrl/api/human-review/submit');
+
+    debugPrint('[HumanReview] POST $uri');
 
     try {
-      final response = await http.post(
-        Uri.parse('https://api.emailjs.com/api/v1.0/email/send'),
-        headers: {
-          'Content-Type': 'application/json',
-          'origin': 'http://localhost',
-        },
-        body: jsonEncode({
-          'service_id': 'service_resumeapp', // set up in EmailJS dashboard
-          'template_id': 'template_humanreview', // set up in EmailJS dashboard
-          'user_id': 'YOUR_EMAILJS_PUBLIC_KEY', // replace with your public key
-          'template_params': {
-            'to_email': 'vasubansal741@gmail.com',
-            'to_name': 'Vasu',
-            'from_name': userName,
-            'from_email': userEmail,
-            'target_role': targetRole.isNotEmpty ? targetRole : 'Not specified',
-            'notes': notes.isNotEmpty ? notes : 'None',
-            'resume_text': resumePreview,
-            'submitted_at': DateTime.now().toString(),
-          },
-        }),
+      final request = http.MultipartRequest('POST', uri);
+
+      // ── Form fields ──────────────────────────────────────────────────────
+      request.fields['userName'] = userName;
+      request.fields['userEmail'] = userEmail;
+      request.fields['targetRole'] = targetRole.isNotEmpty
+          ? targetRole
+          : 'Not specified';
+      request.fields['notes'] = notes.isNotEmpty ? notes : 'None';
+      // Include full resume text as backup (shown in email if PDF is missing)
+      request.fields['resumeText'] = resumeText;
+
+      // ── PDF attachment (from in-memory bytes) ────────────────────────────
+      // pdfBytes are stored in resumeContextProvider when user uploads resume.
+      // They live in RAM — cleared when app closes. If null, email is sent
+      // without attachment (resume text preview is still included in email).
+      final ctx = ref.read(resumeContextProvider);
+      if (ctx.hasPdf) {
+        final fileName = ctx.fileName.isNotEmpty ? ctx.fileName : 'resume.pdf';
+        request.files.add(
+          http.MultipartFile.fromBytes(
+            'resume', // must match multer field name on backend
+            ctx.pdfBytes!,
+            filename: fileName,
+            contentType: MediaType('application', 'pdf'),
+          ),
+        );
+        debugPrint(
+          '[HumanReview] PDF attached: $fileName (${ctx.pdfBytes!.length} bytes)',
+        );
+      } else {
+        debugPrint('[HumanReview] No PDF bytes in memory — sending text-only');
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text(
+                '📝 Sending without PDF — re-upload resume for better results',
+              ),
+              duration: Duration(seconds: 4),
+            ),
+          );
+        }
+      }
+
+      // ── Send request ─────────────────────────────────────────────────────
+      final streamedResponse = await request.send().timeout(
+        const Duration(seconds: 30),
       );
 
-      // EmailJS returns 200 with body "OK" on success
+      final response = await http.Response.fromStream(streamedResponse);
+      debugPrint(
+        '[HumanReview] Response ${response.statusCode}: ${response.body}',
+      );
+
       if (response.statusCode != 200) {
-        // Don't throw — Firestore save already worked. Just log.
-        debugPrint('EmailJS warning: ${response.statusCode} ${response.body}');
+        debugPrint('[HumanReview] Backend error: ${response.body}');
+        throw Exception('Email delivery failed (${response.statusCode})');
       }
+    } on Exception {
+      rethrow; // Let _submitReviewRequest handle and show the warning
     } catch (e) {
-      // Email failure is non-fatal — Firestore has the data
-      debugPrint('Email send error (non-fatal): $e');
+      debugPrint('[HumanReview] Backend call failed: $e');
+      throw Exception(friendlyError(e));
     }
   }
 

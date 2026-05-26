@@ -1,0 +1,15 @@
+{
+   "version": "0.2.0",
+   "configurations": [
+     {
+       "name": "NextHire (dev)",
+       "request": "launch",
+       "type": "dart",
+       "toolArgs": [
+         "--dart-define=EMAILJS_PUBLIC_KEY=XIrD12k_jC6UwluHN",
+         "--dart-define=EMAILJS_SERVICE_ID=service_g5jqs7o",
+         "--dart-define=EMAILJS_TEMPLATE_ID=template_rij6i2s"
+       ]
+     }
+   ]
+ }

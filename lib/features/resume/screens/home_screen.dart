@@ -252,33 +252,53 @@ class HomeScreen extends ConsumerWidget {
             borderRadius: BorderRadius.circular(14),
             border: Border.all(color: const Color(0xFF2D5BE3).withOpacity(0.4)),
           ),
-          child: Row(children: [
-            const Text('🚀', style: TextStyle(fontSize: 26)),
-            const SizedBox(width: 12),
-            const Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text('Premium Resume Tools',
-                      style: TextStyle(color: Colors.white, fontWeight: FontWeight.w700, fontSize: 14)),
-                  SizedBox(height: 2),
-                  Text('Fix · JD Match · Why Rejected · PDF · Expert Review',
-                      style: TextStyle(color: Colors.white54, fontSize: 11)),
-                ],
+          child: Row(
+            children: [
+              const Text('🚀', style: TextStyle(fontSize: 26)),
+              const SizedBox(width: 12),
+              const Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Premium Resume Tools',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontWeight: FontWeight.w700,
+                        fontSize: 14,
+                      ),
+                    ),
+                    SizedBox(height: 2),
+                    Text(
+                      'Fix · JD Match · Why Rejected · PDF · Expert Review',
+                      style: TextStyle(color: Colors.white54, fontSize: 11),
+                    ),
+                  ],
+                ),
               ),
-            ),
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-              decoration: BoxDecoration(
-                color: const Color(0xFFFF6B35).withOpacity(0.2),
-                borderRadius: BorderRadius.circular(6),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFFF6B35).withOpacity(0.2),
+                  borderRadius: BorderRadius.circular(6),
+                ),
+                child: const Text(
+                  'from ₹39',
+                  style: TextStyle(
+                    color: Color(0xFFFF6B35),
+                    fontSize: 11,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
               ),
-              child: const Text('from ₹39',
-                  style: TextStyle(color: Color(0xFFFF6B35), fontSize: 11, fontWeight: FontWeight.w700)),
-            ),
-            const SizedBox(width: 6),
-            const Icon(Icons.arrow_forward_ios, size: 13, color: Colors.white30),
-          ]),
+              const SizedBox(width: 6),
+              const Icon(
+                Icons.arrow_forward_ios,
+                size: 13,
+                color: Colors.white30,
+              ),
+            ],
+          ),
         ),
       ),
     ],
@@ -304,7 +324,11 @@ class HomeScreen extends ConsumerWidget {
         Text(
           'Upload your resume to get AI-powered\nfeedback and match scores.',
           textAlign: TextAlign.center,
-          style: TextStyle(fontSize: 13, color: AppTheme.textSecondary, height: 1.5),
+          style: TextStyle(
+            fontSize: 13,
+            color: AppTheme.textSecondary,
+            height: 1.5,
+          ),
         ),
         const SizedBox(height: 20),
         ElevatedButton.icon(
@@ -581,7 +605,10 @@ class _AnalysisCard extends StatelessWidget {
                   const SizedBox(height: 3),
                   Text(
                     DateFormat('MMM d, yyyy').format(analysis.analyzedAt),
-                    style: TextStyle(fontSize: 12, color: AppTheme.textSecondary),
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: AppTheme.textSecondary,
+                    ),
                   ),
                   const SizedBox(height: 6),
                   // FIX: Wrap prevents score pills from overflowing on narrow screens

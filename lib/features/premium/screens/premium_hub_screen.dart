@@ -4,6 +4,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/constants/app_theme.dart';
+import '../../../core/utils/error_utils.dart';
+import '../../../core/services/analytics_service.dart';
 import '../../../core/services/ocr_service.dart';
 import '../../../features/auth/providers/auth_provider.dart';
 import '../../../providers/premium_providers.dart';
@@ -15,20 +17,58 @@ import 'premium_tools_screen.dart';
 import 'bundle_upgrade_screen.dart';
 import 'resume_generator_screen.dart';
 
-class PremiumHubScreen extends ConsumerWidget {
+class PremiumHubScreen extends ConsumerStatefulWidget {
   final String resumeText;
 
   const PremiumHubScreen({super.key, required this.resumeText});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<PremiumHubScreen> createState() => _PremiumHubScreenState();
+}
+
+class _PremiumHubScreenState extends ConsumerState<PremiumHubScreen> {
+  @override
+  void initState() {
+    super.initState();
+    // Track funnel: user entered the premium hub
+    AnalyticsService().premiumHubViewed();
+  }
+
+  /// Blocks navigation to any paid tool if no resume is loaded.
+  /// Shows a clear "upload first" snackbar instead of silently failing.
+  bool _requireResume(BuildContext context) {
+    final ctx = ref.read(resumeContextProvider);
+    if (ctx.hasResume) return true;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        backgroundColor: AppTheme.primary,
+        duration: const Duration(seconds: 3),
+        content: const Row(
+          children: [
+            Icon(Icons.upload_file, color: Colors.white, size: 18),
+            SizedBox(width: 10),
+            Expanded(
+              child: Text(
+                'Upload your resume first — tap the banner above',
+                style: TextStyle(color: Colors.white, fontSize: 13),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+    return false;
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final userAsync = ref.watch(currentUserProvider);
     final user = userAsync.asData?.value;
     final unlocks = ref.watch(unlockProvider);
     final resumeCtx = ref.watch(resumeContextProvider);
 
-    final detectedRole = resumeCtx.detectedRole?.trim().isNotEmpty == true
-        ? resumeCtx.detectedRole!
+    final detectedRole = resumeCtx.detectedRole.trim().isNotEmpty
+        ? resumeCtx.detectedRole.trim()
         : 'Software Developer';
     // final resumeCtx = ref.watch(resumeContextProvider);
 
@@ -96,37 +136,7 @@ class PremiumHubScreen extends ConsumerWidget {
               _NoResumeBanner(),
               const SizedBox(height: 16),
             ] else ...[
-              Container(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 14,
-                  vertical: 10,
-                ),
-                decoration: BoxDecoration(
-                  color: AppTheme.success.withOpacity(0.12),
-                  borderRadius: BorderRadius.circular(10),
-                  border: Border.all(color: AppTheme.success.withOpacity(0.3)),
-                ),
-                child: Row(
-                  children: [
-                    const Icon(
-                      Icons.check_circle,
-                      color: AppTheme.success,
-                      size: 16,
-                    ),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: Text(
-                        'Resume loaded · Detected: ${detectedRole.isNotEmpty ? detectedRole : "Software Developer"}',
-                        style: const TextStyle(
-                          color: AppTheme.success,
-                          fontSize: 12,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
+              _ResumeLoadedCard(detectedRole: detectedRole),
               const SizedBox(height: 16),
             ],
 
@@ -137,15 +147,18 @@ class PremiumHubScreen extends ConsumerWidget {
               isUnlocked:
                   unlocks.contains('resume_generator') ||
                   unlocks.contains('bundle'),
-              onTap: () => Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (_) => ResumeGeneratorScreen(
-                    userEmail: userEmail,
-                    userName: userName,
+              onTap: () {
+                AnalyticsService().planViewed('resumeGenerator');
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) => ResumeGeneratorScreen(
+                      userEmail: userEmail,
+                      userName: userName,
+                    ),
                   ),
-                ),
-              ),
+                );
+              },
             ),
             const SizedBox(height: 20),
 
@@ -160,7 +173,7 @@ class PremiumHubScreen extends ConsumerWidget {
                 context,
                 MaterialPageRoute(
                   builder: (_) => BundleUpgradeScreen(
-                    resumeText: resumeText,
+                    resumeText: widget.resumeText,
                     userEmail: userEmail,
                     userName: userName,
                   ),
@@ -179,16 +192,20 @@ class PremiumHubScreen extends ConsumerWidget {
               color: AppTheme.primary,
               isUnlocked:
                   unlocks.contains('fix_resume') || unlocks.contains('bundle'),
-              onTap: () => Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (_) => FixResumeScreen(
-                    resumeText: resumeText,
-                    userName: userName,
-                    userEmail: userEmail,
+              onTap: () {
+                if (!_requireResume(context)) return;
+                AnalyticsService().planViewed('fixResume');
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) => FixResumeScreen(
+                      resumeText: widget.resumeText,
+                      userName: userName,
+                      userEmail: userEmail,
+                    ),
                   ),
-                ),
-              ),
+                );
+              },
             ),
             const SizedBox(height: 10),
 
@@ -202,16 +219,20 @@ class PremiumHubScreen extends ConsumerWidget {
               color: const Color(0xFF7C3AED),
               isUnlocked:
                   unlocks.contains('jd_optimize') || unlocks.contains('bundle'),
-              onTap: () => Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (_) => JdOptimizeScreen(
-                    resumeText: resumeText,
-                    userName: userName,
-                    userEmail: userEmail,
+              onTap: () {
+                if (!_requireResume(context)) return;
+                AnalyticsService().planViewed('jdOptimize');
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) => JdOptimizeScreen(
+                      resumeText: widget.resumeText,
+                      userName: userName,
+                      userEmail: userEmail,
+                    ),
                   ),
-                ),
-              ),
+                );
+              },
             ),
             const SizedBox(height: 20),
 
@@ -232,7 +253,8 @@ class PremiumHubScreen extends ConsumerWidget {
               onTap: () => Navigator.push(
                 context,
                 MaterialPageRoute(
-                  builder: (_) => WhyRejectedScreen(resumeText: resumeText),
+                  builder: (_) =>
+                      WhyRejectedScreen(resumeText: widget.resumeText),
                 ),
               ),
             ),
@@ -270,7 +292,7 @@ class PremiumHubScreen extends ConsumerWidget {
                 context,
                 MaterialPageRoute(
                   builder: (_) =>
-                      SelectionBoosterScreen(resumeText: resumeText),
+                      SelectionBoosterScreen(resumeText: widget.resumeText),
                 ),
               ),
             ),
@@ -322,6 +344,194 @@ class _SectionLabel extends StatelessWidget {
       letterSpacing: 0.5,
     ),
   );
+}
+
+// ── Helper: pick and replace resume (used by both banner and loaded card) ─────
+Future<void> _pickAndReplaceResume(BuildContext context, WidgetRef ref) async {
+  try {
+    final result = await FilePicker.platform.pickFiles(
+      type: FileType.custom,
+      allowedExtensions: ['pdf'],
+      withData: true,
+    );
+    if (result == null || result.files.isEmpty) return;
+    final file = result.files.single;
+    if (file.bytes == null) return;
+
+    if (context.mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Row(
+            children: [
+              SizedBox(
+                width: 20,
+                height: 20,
+                child: CircularProgressIndicator(
+                  strokeWidth: 2,
+                  color: Colors.white,
+                ),
+              ),
+              SizedBox(width: 12),
+              Text('Reading your resume...'),
+            ],
+          ),
+          duration: Duration(seconds: 5),
+        ),
+      );
+    }
+
+    final ocr = OcrService();
+    final result2 = await ocr.extractTextFromBytes(
+      bytes: Uint8List.fromList(file.bytes!),
+      extension: 'pdf',
+    );
+
+    if (result2.text.trim().length > 80) {
+      await ref
+          .read(resumeContextProvider.notifier)
+          .setResumeWithPdf(
+            result2.text,
+            source: 'upload',
+            pdfBytes: Uint8List.fromList(file.bytes!),
+            originalFileName: file.name,
+          );
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).hideCurrentSnackBar();
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('✅ Resume updated! All tools are ready.'),
+            backgroundColor: AppTheme.success,
+            duration: Duration(seconds: 2),
+          ),
+        );
+      }
+    } else {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).hideCurrentSnackBar();
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Could not read PDF. Try a text-based PDF file.'),
+          ),
+        );
+      }
+    }
+  } catch (e) {
+    if (context.mounted) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(friendlyError(e))));
+    }
+  }
+}
+
+// ── Resume loaded card (shown when resume is in context) ──────────────────────
+class _ResumeLoadedCard extends ConsumerWidget {
+  final String detectedRole;
+  const _ResumeLoadedCard({required this.detectedRole});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final role = detectedRole.isNotEmpty ? detectedRole : 'Software Developer';
+    return Container(
+      decoration: BoxDecoration(
+        color: AppTheme.success.withOpacity(0.07),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(
+          color: AppTheme.success.withOpacity(0.35),
+          width: 1.5,
+        ),
+      ),
+      child: Column(
+        children: [
+          // Top row — status
+          Padding(
+            padding: const EdgeInsets.fromLTRB(14, 12, 14, 8),
+            child: Row(
+              children: [
+                Container(
+                  width: 36,
+                  height: 36,
+                  decoration: BoxDecoration(
+                    color: AppTheme.success.withOpacity(0.15),
+                    shape: BoxShape.circle,
+                  ),
+                  child: const Icon(
+                    Icons.check_circle,
+                    color: AppTheme.success,
+                    size: 20,
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text(
+                        'Resume Uploaded ✅',
+                        style: TextStyle(
+                          color: AppTheme.success,
+                          fontSize: 13,
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                      Text(
+                        'Detected role: $role',
+                        style: const TextStyle(
+                          color: AppTheme.success,
+                          fontSize: 11,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+
+          // Divider
+          Divider(height: 1, color: AppTheme.success.withOpacity(0.2)),
+
+          // Change resume button — full width, clearly tappable
+          InkWell(
+            onTap: () => _pickAndReplaceResume(context, ref),
+            borderRadius: const BorderRadius.only(
+              bottomLeft: Radius.circular(14),
+              bottomRight: Radius.circular(14),
+            ),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 14),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(
+                    Icons.upload_file_rounded,
+                    size: 16,
+                    color: AppTheme.success.withOpacity(0.85),
+                  ),
+                  const SizedBox(width: 6),
+                  Text(
+                    'Change Resume / Upload New',
+                    style: TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w700,
+                      color: AppTheme.success.withOpacity(0.9),
+                    ),
+                  ),
+                  const SizedBox(width: 4),
+                  Icon(
+                    Icons.chevron_right,
+                    size: 16,
+                    color: AppTheme.success.withOpacity(0.6),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
 }
 
 class _NoResumeBanner extends ConsumerWidget {
@@ -387,73 +597,7 @@ class _NoResumeBanner extends ConsumerWidget {
   }
 
   Future<void> _pickAndUploadResume(BuildContext context, WidgetRef ref) async {
-    try {
-      final result = await FilePicker.platform.pickFiles(
-        type: FileType.custom,
-        allowedExtensions: ['pdf'],
-        withData: true,
-      );
-      if (result == null || result.files.isEmpty) return;
-      final file = result.files.single;
-      if (file.bytes == null) return;
-
-      // Show loading
-      if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Row(
-              children: [
-                SizedBox(
-                  width: 20,
-                  height: 20,
-                  child: CircularProgressIndicator(
-                    strokeWidth: 2,
-                    color: Colors.white,
-                  ),
-                ),
-                SizedBox(width: 12),
-                Text('Reading your resume...'),
-              ],
-            ),
-            duration: Duration(seconds: 4),
-          ),
-        );
-      }
-
-      // Extract text from PDF bytes using AI service
-      final text = await _extractPdfText(file.bytes!);
-
-      if (text.trim().length > 80) {
-        await ref
-            .read(resumeContextProvider.notifier)
-            .setResume(text, source: 'upload');
-        if (context.mounted) {
-          ScaffoldMessenger.of(context).hideCurrentSnackBar();
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('✅ Resume uploaded! All tools are ready.'),
-              backgroundColor: AppTheme.success,
-              duration: Duration(seconds: 2),
-            ),
-          );
-        }
-      } else {
-        if (context.mounted) {
-          ScaffoldMessenger.of(context).hideCurrentSnackBar();
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('⚠️ Could not read the PDF. Try a text-based PDF.'),
-            ),
-          );
-        }
-      }
-    } catch (e) {
-      if (context.mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text('Error: $e')));
-      }
-    }
+    await _pickAndReplaceResume(context, ref);
   }
 
   Future<String> _extractPdfText(List<int> bytes) async {
@@ -643,7 +787,7 @@ class _BundleCard extends StatelessWidget {
                   Row(
                     children: [
                       const Text(
-                        '₹89',
+                        '₹79',
                         style: TextStyle(
                           color: Colors.white,
                           fontWeight: FontWeight.w800,
@@ -652,7 +796,7 @@ class _BundleCard extends StatelessWidget {
                       ),
                       const SizedBox(width: 8),
                       Text(
-                        '₹267 if bought separately',
+                        '₹266 if bought separately',
                         style: TextStyle(
                           color: Colors.white.withOpacity(0.5),
                           fontSize: 11,
@@ -694,7 +838,7 @@ class _BestValueBadge extends StatelessWidget {
       borderRadius: BorderRadius.circular(4),
     ),
     child: const Text(
-      'SAVE ₹39',
+      'SAVE ₹187',
       style: TextStyle(
         color: Colors.white,
         fontSize: 9,

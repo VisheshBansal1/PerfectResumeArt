@@ -64,7 +64,9 @@ class JobSelectionBottomSheet extends ConsumerWidget {
             data: (list) => list.isEmpty
                 ? const Padding(
                     padding: EdgeInsets.all(32),
-                    child: Text('No active job roles. Ask an admin to create one.'),
+                    child: Text(
+                      'No active job roles. Ask an admin to create one.',
+                    ),
                   )
                 : Flexible(
                     child: _JobList(
@@ -114,61 +116,66 @@ class _JobCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Card(
-        child: InkWell(
-          onTap: onSelect != null ? () => onSelect!(job) : null,
-          borderRadius: BorderRadius.circular(12),
-          child: Padding(
-            padding: const EdgeInsets.all(16),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
+    child: InkWell(
+      onTap: onSelect != null ? () => onSelect!(job) : null,
+      borderRadius: BorderRadius.circular(12),
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
               children: [
-                Row(
-                  children: [
-                    Expanded(
-                      child: Text(
-                        job.title,
-                        style: const TextStyle(
-                            fontSize: 15, fontWeight: FontWeight.w600),
-                      ),
+                Expanded(
+                  child: Text(
+                    job.title,
+                    style: const TextStyle(
+                      fontSize: 15,
+                      fontWeight: FontWeight.w600,
                     ),
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 8, vertical: 3),
-                      decoration: BoxDecoration(
-                        color: AppTheme.primary.withOpacity(0.08),
-                        borderRadius: BorderRadius.circular(4),
-                      ),
-                      child: Text(
-                        '${job.minExperience}+ yrs',
-                        style: TextStyle(
-                            fontSize: 11,
-                            color: AppTheme.primary,
-                            fontWeight: FontWeight.w600),
-                      ),
+                  ),
+                ),
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 8,
+                    vertical: 3,
+                  ),
+                  decoration: BoxDecoration(
+                    color: AppTheme.primary.withOpacity(0.08),
+                    borderRadius: BorderRadius.circular(4),
+                  ),
+                  child: Text(
+                    '${job.minExperience}+ yrs',
+                    style: TextStyle(
+                      fontSize: 11,
+                      color: AppTheme.primary,
+                      fontWeight: FontWeight.w600,
                     ),
-                  ],
-                ),
-                const SizedBox(height: 6),
-                Text(
-                  job.description,
-                  style: TextStyle(fontSize: 13, color: Colors.grey[600]),
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                ),
-                const SizedBox(height: 10),
-                Wrap(
-                  spacing: 6,
-                  runSpacing: 4,
-                  children: job.requiredSkills
-                      .take(5)
-                      .map((s) => _SkillTag(s))
-                      .toList(),
+                  ),
                 ),
               ],
             ),
-          ),
+            const SizedBox(height: 6),
+            Text(
+              job.description,
+              style: TextStyle(fontSize: 13, color: Colors.grey[600]),
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+            ),
+            const SizedBox(height: 10),
+            Wrap(
+              spacing: 6,
+              runSpacing: 4,
+              children: job.requiredSkills
+                  .take(5)
+                  .map((s) => _SkillTag(s))
+                  .toList(),
+            ),
+          ],
         ),
-      );
+      ),
+    ),
+  );
 }
 
 class _SkillTag extends StatelessWidget {
@@ -177,12 +184,12 @@ class _SkillTag extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Container(
-        padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
-        decoration: BoxDecoration(
-          color: Colors.grey[100],
-          borderRadius: BorderRadius.circular(4),
-          border: Border.all(color: Colors.grey[300]!),
-        ),
-        child: Text(skill, style: const TextStyle(fontSize: 11)),
-      );
+    padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+    decoration: BoxDecoration(
+      color: Colors.grey[100],
+      borderRadius: BorderRadius.circular(4),
+      border: Border.all(color: Colors.grey[300]!),
+    ),
+    child: Text(skill, style: const TextStyle(fontSize: 11)),
+  );
 }

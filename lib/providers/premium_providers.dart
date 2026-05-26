@@ -1,7 +1,8 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../core/utils/error_utils.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:flutter_riverpod/legacy.dart';
+// import 'package:flutter_riverpod/legacy.dart';
 
 import '../core/services/resume_improve_service.dart'; // GeneratedResume, ExperienceEntry, ProjectEntry
 import '../core/services/resume_pdf_service.dart';
@@ -111,7 +112,7 @@ class FixResumeNotifier extends StateNotifier<FixResumeState> {
       );
       state = state.copyWith(isLoading: false, result: result);
     } catch (e) {
-      state = state.copyWith(isLoading: false, error: e.toString());
+      state = state.copyWith(isLoading: false, error: friendlyError(e));
     }
   }
 
@@ -127,7 +128,7 @@ class FixResumeNotifier extends StateNotifier<FixResumeState> {
       );
       state = state.copyWith(isGeneratingPdf: false, pdfPath: path);
     } catch (e) {
-      state = state.copyWith(isGeneratingPdf: false, error: e.toString());
+      state = state.copyWith(isGeneratingPdf: false, error: friendlyError(e));
     }
   }
 
@@ -193,7 +194,7 @@ class JdOptimizeNotifier extends StateNotifier<JdOptimizeState> {
       );
       state = state.copyWith(isLoading: false, result: result);
     } catch (e) {
-      state = state.copyWith(isLoading: false, error: e.toString());
+      state = state.copyWith(isLoading: false, error: friendlyError(e));
     }
   }
 
@@ -209,7 +210,7 @@ class JdOptimizeNotifier extends StateNotifier<JdOptimizeState> {
       );
       state = state.copyWith(isGeneratingPdf: false, pdfPath: path);
     } catch (e) {
-      state = state.copyWith(isGeneratingPdf: false, error: e.toString());
+      state = state.copyWith(isGeneratingPdf: false, error: friendlyError(e));
     }
   }
 
@@ -256,7 +257,7 @@ class RejectionNotifier extends StateNotifier<RejectionState> {
       );
       state = RejectionState(reasons: reasons);
     } catch (e) {
-      state = RejectionState(error: e.toString());
+      state = RejectionState(error: friendlyError(e));
     }
   }
 
@@ -291,7 +292,7 @@ class ProjectImproveNotifier extends StateNotifier<ProjectImproveState> {
       );
       state = ProjectImproveState(result: result);
     } catch (e) {
-      state = ProjectImproveState(error: e.toString());
+      state = ProjectImproveState(error: friendlyError(e));
     }
   }
 
@@ -335,7 +336,7 @@ class SelectionBoosterNotifier extends StateNotifier<SelectionBoosterState> {
       );
       state = SelectionBoosterState(result: result);
     } catch (e) {
-      state = SelectionBoosterState(error: e.toString());
+      state = SelectionBoosterState(error: friendlyError(e));
     }
   }
 
@@ -421,7 +422,7 @@ class ResumeGeneratorNotifier extends StateNotifier<ResumeGeneratorState> {
       );
       state = state.copyWith(isLoading: false, result: result);
     } catch (e) {
-      state = state.copyWith(isLoading: false, error: e.toString());
+      state = state.copyWith(isLoading: false, error: friendlyError(e));
     }
   }
 
@@ -436,7 +437,7 @@ class ResumeGeneratorNotifier extends StateNotifier<ResumeGeneratorState> {
       );
       state = state.copyWith(isGeneratingPdf: false, pdfPath: path);
     } catch (e) {
-      state = state.copyWith(isGeneratingPdf: false, error: e.toString());
+      state = state.copyWith(isGeneratingPdf: false, error: friendlyError(e));
     }
   }
 

@@ -10,6 +10,7 @@ import '../../../core/services/payment_service.dart';
 import '../../../core/services/resume_pdf_service.dart';
 import '../../../providers/premium_providers.dart';
 import '../../../providers/resume_context_provider.dart';
+import '../widgets/share_result_card.dart';
 
 class FixResumeScreen extends ConsumerStatefulWidget {
   final String resumeText;
@@ -502,6 +503,17 @@ class _ImprovedResumeTab extends StatelessWidget {
             scoreBefore: result.atsScoreBefore,
             scoreAfter: result.atsScoreAfter,
             sectionsImproved: result.sectionsImproved,
+          ),
+          const SizedBox(height: 12),
+
+          // Share card — show off the improvement
+          ShareResultBanner(
+            toolName: 'Fix My Resume',
+            scoreBefore: result.atsScoreBefore,
+            scoreAfter: result.atsScoreAfter,
+            highlight: result.sectionsImproved.isNotEmpty
+                ? '${result.sectionsImproved.length} sections improved with impact metrics'
+                : 'Bullets rewritten with action verbs and metrics',
           ),
           const SizedBox(height: 16),
 

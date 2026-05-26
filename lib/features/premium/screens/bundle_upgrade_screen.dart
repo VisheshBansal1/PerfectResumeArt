@@ -105,12 +105,12 @@ class _BundleUpgradeScreenState extends ConsumerState<BundleUpgradeScreen> {
                   style: TextStyle(color: Colors.white70, fontSize: 13, height: 1.4)),
               const SizedBox(height: 16),
               Row(children: [
-                const Text('Rs.89', style: TextStyle(color: Colors.white, fontSize: 32, fontWeight: FontWeight.w800)),
+                const Text('₹79', style: TextStyle(color: Colors.white, fontSize: 32, fontWeight: FontWeight.w800)),
                 const SizedBox(width: 10),
                 Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                  const Text('Rs.267 if bought separately',
+                  const Text('₹266 if bought separately',
                       style: TextStyle(color: Colors.white60, fontSize: 12, decoration: TextDecoration.lineThrough)),
-                  Text('You save Rs.178', style: TextStyle(color: Colors.yellow[300], fontSize: 12, fontWeight: FontWeight.w700)),
+                  Text('You save ₹187 (70% off)', style: TextStyle(color: Colors.yellow[300], fontSize: 12, fontWeight: FontWeight.w700)),
                 ]),
               ]),
             ]),
@@ -183,9 +183,9 @@ class _BundleUpgradeScreenState extends ConsumerState<BundleUpgradeScreen> {
               child: const Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  Text('Get All 5 Tools - Rs.89',
+                  Text('Get All 5 Tools — ₹79',
                       style: TextStyle(fontSize: 15, fontWeight: FontWeight.w800)),
-                  Text('Save Rs.178 vs buying separately',
+                  Text('Save ₹187 vs buying separately',
                       style: TextStyle(fontSize: 11, color: Colors.white70)),
                 ],
               ),

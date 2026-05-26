@@ -1,164 +1,258 @@
+import 'dart:async';
+
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../core/constants/app_constants.dart';
+
+import '../../features/admin/screens/admin_main_screen.dart';
+import '../../features/admin/screens/candidate_detail_screen.dart';
+import '../../features/admin/screens/job_creation_screen.dart';
+import '../../features/admin/screens/vacany_applicants_screen.dart';
+
+import '../../features/analysis/screens/analysis_result_screen.dart';
+
 import '../../features/auth/providers/auth_provider.dart';
 import '../../features/auth/screens/login_screen.dart';
 import '../../features/auth/screens/register_screen.dart';
-import '../../features/auth/screens/role_selection_screen.dart';
-import '../../features/resume/screens/upload_resume_screen.dart';
-import '../../features/resume/screens/home_screen.dart';
-import '../../features/resume/screens/ats_checker_screen.dart';
-import '../../features/resume/screens/profile_screen.dart';
+
 import '../../features/job_roles/screens/job_selection_screen.dart';
-import '../../features/analysis/screens/analysis_result_screen.dart';
-import '../../features/admin/screens/admin_main_screen.dart';
-import '../../features/admin/screens/job_creation_screen.dart';
-import '../../features/admin/screens/candidate_detail_screen.dart';
-import '../../features/admin/screens/vacany_applicants_screen.dart';
-import '../../core/constants/app_constants.dart';
+
+import '../../features/resume/screens/ats_checker_screen.dart';
+import '../../features/resume/screens/home_screen.dart';
+import '../../features/resume/screens/profile_screen.dart';
+import '../../features/resume/screens/upload_resume_screen.dart';
+
+/// ─────────────────────────────────────────────────────────
+/// GOROUTER REFRESH STREAM
+/// ─────────────────────────────────────────────────────────
+
+class GoRouterRefreshStream extends ChangeNotifier {
+  GoRouterRefreshStream(Stream<dynamic> stream) {
+    notifyListeners();
+
+    _subscription = stream.asBroadcastStream().listen((_) => notifyListeners());
+  }
+
+  late final StreamSubscription<dynamic> _subscription;
+
+  @override
+  void dispose() {
+    _subscription.cancel();
+    super.dispose();
+  }
+}
+
+/// ─────────────────────────────────────────────────────────
+/// APP ROUTER
+/// ─────────────────────────────────────────────────────────
 
 final appRouterProvider = Provider<GoRouter>((ref) {
-  final authState = ref.watch(authStateProvider);
-  final currentUser = ref.watch(currentUserProvider);
+  final router = GoRouter(
+    debugLogDiagnostics: true,
 
-  return GoRouter(
     initialLocation: AppRoutes.login,
+
+    refreshListenable: GoRouterRefreshStream(
+      FirebaseAuth.instance.authStateChanges(),
+    ),
+
     redirect: (context, state) {
-      final isLoggedIn = authState.when(
-        data: (user) => user != null,
-        loading: () => false,
-        error: (_, __) => false,
-      );
+      final authAsync = ref.read(authStateProvider);
 
-      final userRole = currentUser.when(
-        data: (user) => user?.role,
-        loading: () => null,
-        error: (_, __) => null,
-      );
+      final userAsync = ref.read(currentUserProvider);
 
-      final isLoggingIn =
-          state.matchedLocation == AppRoutes.login ||
-          state.matchedLocation == AppRoutes.register ||
-          state.matchedLocation == AppRoutes.roleSelection;
-
-      if (!isLoggedIn && !isLoggingIn) return AppRoutes.login;
-
-      if (isLoggedIn && isLoggingIn) {
-        if (userRole == AppConstants.roleAdmin) return AppRoutes.adminDashboard;
-        return AppRoutes.home;
+      /// Prevent redirect while loading
+      if (authAsync.isLoading || userAsync.isLoading) {
+        return null;
       }
 
-      final isAdminRoute = state.matchedLocation.startsWith('/admin');
-      if (isAdminRoute &&
-          userRole != null &&
-          userRole != AppConstants.roleAdmin) {
-        return AppRoutes.home;
+      final isLoggedIn = authAsync.value != null;
+
+      final userRole = userAsync.value?.role;
+
+      final location = state.matchedLocation;
+
+      final isAuthRoute =
+          location == AppRoutes.login || location == AppRoutes.register;
+
+      /// Not logged in
+      if (!isLoggedIn && !isAuthRoute) {
+        return AppRoutes.login;
       }
 
-      final isUserRoute =
-          state.matchedLocation == AppRoutes.home ||
-          state.matchedLocation == AppRoutes.uploadResume ||
-          state.matchedLocation == AppRoutes.atsChecker;
-      if (isUserRoute && userRole == AppConstants.roleAdmin) {
-        return AppRoutes.adminDashboard;
+      /// Already logged in
+      if (isLoggedIn && isAuthRoute) {
+        return userRole == AppConstants.roleAdmin
+            ? AppRoutes.adminDashboard
+            : AppRoutes.home;
+      }
+
+      /// Admin protection
+      if (location.startsWith('/admin')) {
+        if (userRole != AppConstants.roleAdmin) {
+          return AppRoutes.home;
+        }
       }
 
       return null;
     },
+
     routes: [
-      // ─── Auth Routes ─────────────────────────────────────────
-      GoRoute(path: AppRoutes.login, builder: (c, s) => const LoginScreen()),
+      /// ─────────────────────────────────────
+      /// AUTH
+      /// ─────────────────────────────────────
       GoRoute(
-        path: AppRoutes.register,
-        builder: (c, s) => const RegisterScreen(),
-      ),
-      GoRoute(
-        path: AppRoutes.roleSelection,
-        builder: (c, s) => const RoleSelectionScreen(),
+        path: AppRoutes.login,
+        builder: (context, state) {
+          return const LoginScreen();
+        },
       ),
 
-      // ─── User Routes ──────────────────────────────────────────
-      GoRoute(path: AppRoutes.home, builder: (c, s) => const HomeScreen()),
+      GoRoute(
+        path: AppRoutes.register,
+        builder: (context, state) {
+          return const RegisterScreen();
+        },
+      ),
+
+      /// ─────────────────────────────────────
+      /// USER
+      /// ─────────────────────────────────────
+      GoRoute(
+        path: AppRoutes.home,
+        builder: (context, state) {
+          return const HomeScreen();
+        },
+      ),
+
       GoRoute(
         path: AppRoutes.uploadResume,
-        builder: (c, s) => const UploadResumeScreen(),
+        builder: (context, state) {
+          return const UploadResumeScreen();
+        },
       ),
+
       GoRoute(
         path: AppRoutes.atsChecker,
-        builder: (c, s) => const AtsCheckerScreen(),
+        builder: (context, state) {
+          return const AtsCheckerScreen();
+        },
       ),
+
       GoRoute(
         path: AppRoutes.profile,
-        builder: (c, s) => const ProfileScreen(),
+        builder: (context, state) {
+          return const ProfileScreen();
+        },
       ),
+
       GoRoute(
         path: AppRoutes.jobSelection,
-        builder: (c, s) => const JobSelectionScreen(),
+        builder: (context, state) {
+          return const JobSelectionScreen();
+        },
       ),
+
       GoRoute(
         path: AppRoutes.analysisResult,
-        builder: (c, s) {
-          final analysisId = s.pathParameters['analysisId'] ?? '';
+        builder: (context, state) {
+          final analysisId = state.pathParameters['analysisId'] ?? '';
+
           return AnalysisResultScreen(analysisId: analysisId);
         },
       ),
 
-      // ─── Admin / Recruiter Routes ─────────────────────────────
+      /// ─────────────────────────────────────
+      /// ADMIN
+      /// ─────────────────────────────────────
       GoRoute(
         path: AppRoutes.adminDashboard,
-        builder: (c, s) => const AdminMainScreen(),
+        builder: (context, state) {
+          return const AdminMainScreen();
+        },
+
         routes: [
           GoRoute(
             path: 'job-creation',
-            builder: (c, s) => const JobCreationScreen(),
+            builder: (context, state) {
+              return const JobCreationScreen();
+            },
           ),
-          // Vacancy applicants — pushed from the vacancies tab
+
           GoRoute(
             path: 'vacancy/:jobId',
-            builder: (c, s) {
-              final jobId = s.pathParameters['jobId'] ?? '';
+            builder: (context, state) {
+              final jobId = state.pathParameters['jobId'] ?? '';
+
               return VacancyApplicantsScreen(jobId: jobId);
             },
           ),
+
           GoRoute(
             path: 'candidates/:candidateId',
-            builder: (c, s) {
-              final candidateId = s.pathParameters['candidateId'] ?? '';
+            builder: (context, state) {
+              final candidateId = state.pathParameters['candidateId'] ?? '';
+
               return CandidateDetailScreen(candidateId: candidateId);
             },
           ),
         ],
       ),
     ],
-    errorBuilder: (context, state) =>
-        Scaffold(body: Center(child: Text('Route not found: ${state.error}'))),
+
+    errorBuilder: (context, state) {
+      return Scaffold(
+        body: Center(child: Text('Page not found: ${state.error}')),
+      );
+    },
   );
+
+  ref.onDispose(router.dispose);
+
+  return router;
 });
 
-class AppRoutes {
-  // Auth
-  static const String login = '/login';
-  static const String register = '/register';
-  static const String roleSelection = '/role-selection';
+/// ─────────────────────────────────────────────────────────
+/// ROUTE CONSTANTS
+/// ─────────────────────────────────────────────────────────
 
-  // User
+class AppRoutes {
+  static const String login = '/login';
+
+  static const String register = '/register';
+
   static const String home = '/home';
+
   static const String uploadResume = '/upload-resume';
+
   static const String atsChecker = '/ats-checker';
+
   static const String profile = '/profile';
+
   static const String jobSelection = '/job-selection';
+
   static const String analysisResult = '/analysis/:analysisId';
 
-  // Recruiter (admin) — sub-routes are relative to /admin
   static const String adminDashboard = '/admin';
+
   static const String jobCreation = '/admin/job-creation';
+
   static const String vacancyApplicants = '/admin/vacancy/:jobId';
+
   static const String candidateDetail = '/admin/candidates/:candidateId';
 
-  // Helpers
-  static String analysisResultWithId(String id) => '/analysis/$id';
-  static String vacancyApplicantsWithId(String jobId) =>
-      '/admin/vacancy/$jobId';
-  static String candidateDetailWithId(String id) => '/admin/candidates/$id';
+  static String analysisResultWithId(String id) {
+    return '/analysis/$id';
+  }
+
+  static String vacancyApplicantsWithId(String id) {
+    return '/admin/vacancy/$id';
+  }
+
+  static String candidateDetailWithId(String id) {
+    return '/admin/candidates/$id';
+  }
 }

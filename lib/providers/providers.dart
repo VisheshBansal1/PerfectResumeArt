@@ -1,7 +1,8 @@
 import 'dart:io';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../core/utils/error_utils.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:flutter_riverpod/legacy.dart';
+// import 'package:flutter_riverpod/legacy.dart';
 import 'package:path/path.dart' as path;
 import 'dart:typed_data';
 import 'package:flutter/foundation.dart' show kIsWeb;
@@ -234,7 +235,7 @@ class ResumeUploadNotifier extends StateNotifier<ResumeUploadState> {
       final result = await _ocrService.extractText(file);
       state = state.copyWith(isExtracting: false, extractedText: result.text);
     } catch (e) {
-      state = state.copyWith(isExtracting: false, error: e.toString());
+      state = state.copyWith(isExtracting: false, error: friendlyError(e));
     }
   }
 
@@ -274,7 +275,7 @@ class ResumeUploadNotifier extends StateNotifier<ResumeUploadState> {
       state = state.copyWith(
         isExtracting: false,
         isAnalyzing: false,
-        error: e.toString(),
+        error: friendlyError(e),
       );
       return null;
     }
@@ -319,7 +320,7 @@ class ResumeUploadNotifier extends StateNotifier<ResumeUploadState> {
       state = state.copyWith(
         isExtracting: false,
         isAnalyzing: false,
-        error: e.toString(),
+        error: friendlyError(e),
       );
       return null;
     }
@@ -356,7 +357,7 @@ class ResumeUploadNotifier extends StateNotifier<ResumeUploadState> {
       state = state.copyWith(
         isExtracting: false,
         isAnalyzing: false,
-        error: e.toString(),
+        error: friendlyError(e),
       );
       return null;
     }
@@ -376,7 +377,7 @@ class ResumeUploadNotifier extends StateNotifier<ResumeUploadState> {
       );
       state = state.copyWith(isExtracting: false, extractedText: result.text);
     } catch (e) {
-      state = state.copyWith(isExtracting: false, error: e.toString());
+      state = state.copyWith(isExtracting: false, error: friendlyError(e));
     }
   }
 
@@ -419,7 +420,7 @@ class ResumeUploadNotifier extends StateNotifier<ResumeUploadState> {
       state = state.copyWith(
         isExtracting: false,
         isAnalyzing: false,
-        error: e.toString(),
+        error: friendlyError(e),
       );
       return null;
     }
@@ -448,7 +449,7 @@ class ResumeUploadNotifier extends StateNotifier<ResumeUploadState> {
       state = state.copyWith(isAnalyzing: false, analysisId: analysisId);
       return analysisId;
     } catch (e) {
-      state = state.copyWith(isAnalyzing: false, error: e.toString());
+      state = state.copyWith(isAnalyzing: false, error: friendlyError(e));
       return null;
     }
   }
@@ -489,7 +490,7 @@ class ResumeUploadNotifier extends StateNotifier<ResumeUploadState> {
       state = state.copyWith(
         isExtracting: false,
         isAnalyzing: false,
-        error: e.toString(),
+        error: friendlyError(e),
       );
       return null;
     }
@@ -537,7 +538,7 @@ class ResumeUploadNotifier extends StateNotifier<ResumeUploadState> {
       state = state.copyWith(
         isExtracting: false,
         isAnalyzing: false,
-        error: e.toString(),
+        error: friendlyError(e),
       );
       return null;
     }

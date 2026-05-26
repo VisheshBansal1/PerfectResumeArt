@@ -1,8 +1,8 @@
 import 'dart:convert';
 import 'package:http/http.dart' as http;
-import 'package:flutter_dotenv/flutter_dotenv.dart';
 
 import '../../models/models.dart';
+import 'app_config.dart';
 
 // ─── Document Types ────────────────────────────────────────────────────────────
 
@@ -567,12 +567,10 @@ class _HeuristicClassifier {
   }
 }
 
-
 // ─── Service ───────────────────────────────────────────────────────────────────
 class AiService {
-  static String get _apiKey => dotenv.env['GROQ_API_KEY'] ?? '';
-  static const String _baseUrl =
-      'https://api.groq.com/openai/v1/chat/completions';
+  // GROQ_API_KEY and Groq URL removed — AI calls now go through backend proxy.
+  // See: https://resume-ai-backend-bwzx.onrender.com/api/ai/chat
 
   static const String _primaryModel = 'llama-3.3-70b-versatile';
   static const String _classifierModel = 'llama-3.1-8b-instant';
@@ -1175,42 +1173,68 @@ OUTPUT — Valid JSON only. No markdown. No text outside the JSON.
   // ─── Groq API Call ────────────────────────────────────────────────────────────
 
   /// Single API call with no retry.
+  /// Sends [prompt] to the backend proxy (/api/ai/chat) instead of calling
+  /// Groq directly. GROQ_API_KEY stays on the Render server — never exposed
+  /// in the Flutter web bundle.
   Future<String> _callGroq(
     String prompt, {
     required String model,
     required int maxTokens,
   }) async {
-    if (_apiKey.isEmpty) {
-      throw AiException(
-        'Groq API key not configured. Add GROQ_API_KEY to your .env file.',
+    final backendUrl = AppConfig.backendUrl;
+    if (backendUrl.isEmpty) {
+      throw const AiException(
+        'Backend URL not configured. Pass --dart-define=BACKEND_URL=... at build time.',
       );
     }
 
-    final response = await http
-        .post(
-          Uri.parse(_baseUrl),
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': 'Bearer $_apiKey',
-          },
-          body: jsonEncode({
-            'model': model,
-            'messages': [
-              {'role': 'user', 'content': prompt},
-            ],
-            'temperature': 0.10,
-            'max_tokens': maxTokens,
-            'top_p': 0.90,
-            'stream': false,
-          }),
-        )
-        .timeout(
-          const Duration(seconds: 60),
-          onTimeout: () =>
-              throw AiException('Request timed out. Please try again.'),
-        );
+    final uri = Uri.parse('$backendUrl/api/ai/chat');
 
-    return _handleResponse(response);
+    late http.Response response;
+    try {
+      response = await http
+          .post(
+            uri,
+            headers: {'Content-Type': 'application/json'},
+            body: jsonEncode({
+              'prompt': prompt,
+              'model': model,
+              'maxTokens': maxTokens,
+            }),
+          )
+          .timeout(
+            const Duration(seconds: 95),
+            onTimeout: () =>
+                throw const AiException('Request timed out. Please try again.'),
+          );
+    } on AiException {
+      rethrow;
+    } catch (e) {
+      throw AiException('Network error: ${e.toString()}');
+    }
+
+    // Backend returns { success, content } or { success, error }
+    final Map<String, dynamic> data;
+    try {
+      data = jsonDecode(response.body) as Map<String, dynamic>;
+    } catch (_) {
+      throw AiException(
+        'Invalid response from server (${response.statusCode}).',
+      );
+    }
+
+    if (response.statusCode != 200 || data['success'] != true) {
+      final error = data['error'] as String? ?? 'AI service error.';
+      throw AiException(error);
+    }
+
+    final content = data['content'] as String?;
+    if (content == null || content.trim().isEmpty) {
+      throw const AiException(
+        'Empty response from AI service. Please try again.',
+      );
+    }
+    return content;
   }
 
   /// API call with one automatic retry on transient failures (429, 503, timeout).
@@ -1240,6 +1264,8 @@ OUTPUT — Valid JSON only. No markdown. No text outside the JSON.
     throw const AiException('All retry attempts failed. Please try again.');
   }
 
+  // ignore: unused_element
+  // Previously used for direct Groq calls — now handled by backend proxy.
   String _handleResponse(http.Response response) {
     switch (response.statusCode) {
       case 200:

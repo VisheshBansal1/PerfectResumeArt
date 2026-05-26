@@ -3,8 +3,10 @@ import 'dart:async';
 
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
-import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:http/http.dart' as http;
+
+import 'app_config.dart';
+import 'email_service.dart';
 
 // Mobile-only — conditional import prevents web crash
 import 'package:razorpay_flutter/razorpay_flutter.dart'
@@ -42,7 +44,7 @@ extension PaymentPlanX on PaymentPlan {
       case PaymentPlan.jdOptimize:
         return 4900;
       case PaymentPlan.bundle:
-        return 8900;
+        return 7900; // ₹79 — clear saving vs ₹39+₹49+₹49+₹129=₹266
       case PaymentPlan.humanReview:
         return 12900;
       case PaymentPlan.resumeGenerator:
@@ -73,7 +75,7 @@ extension PaymentPlanX on PaymentPlan {
       case PaymentPlan.jdOptimize:
         return '₹49';
       case PaymentPlan.bundle:
-        return '₹89';
+        return '₹79';
       case PaymentPlan.humanReview:
         return '₹129';
       case PaymentPlan.resumeGenerator:
@@ -115,9 +117,8 @@ class PaymentResult {
 // ─── Payment Service ──────────────────────────────────────────────────────────
 
 class PaymentService {
-  static String get _backendUrl =>
-      dotenv.env['BACKEND_URL'] ?? 'http://localhost:3000';
-  static String get _keyId => dotenv.env['RAZORPAY_KEY_ID'] ?? '';
+  static String get _backendUrl => AppConfig.backendUrl;
+  static String get _keyId => AppConfig.razorpayKeyId;
 
   Razorpay? _razorpay;
 
@@ -458,13 +459,21 @@ class _PaywallSheetState extends State<PaywallSheet> {
         plan: widget.plan,
         userEmail: widget.userEmail,
         userName: widget.userName,
-        onResult: (result) {
+        onResult: (result) async {
           debugPrint(
             '[PAY] onResult called — success=${result.success} error=${result.error}',
           );
           if (!mounted) return;
           setState(() => _loading = false);
+
           if (result.success) {
+            // ── Send confirmation email ONLY after verified payment success ──
+            // This is the correct integration point:
+            //   • Razorpay has returned success (mobile) OR
+            //   • Backend /api/payment/verify-payment returned { success: true }
+            // Do NOT call this before onResult, or on payment failure.
+            await _sendConfirmationEmail();
+
             widget.onSuccess();
           } else {
             setState(
@@ -485,6 +494,51 @@ class _PaywallSheetState extends State<PaywallSheet> {
       // Safety net — ensure spinner always stops
       if (mounted && _loading) {
         setState(() => _loading = false);
+      }
+    }
+  }
+
+  /// Sends a payment confirmation email via EmailJS and shows a snackbar
+  /// with the result. Non-fatal — a failure here never blocks the unlock flow.
+  Future<void> _sendConfirmationEmail() async {
+    try {
+      await EmailService.instance.sendPaymentSuccessEmail(
+        userName: widget.userName,
+        userEmail: widget.userEmail,
+        planName: widget.plan.title,
+        amount: widget.plan.displayPrice,
+      );
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('✅ Confirmation email sent'),
+            backgroundColor: Color(0xFF43A047),
+            duration: Duration(seconds: 3),
+          ),
+        );
+      }
+    } on EmailServiceException catch (e) {
+      debugPrint('[PAY] Confirmation email failed (non-fatal): $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('⚠️ Failed to send confirmation email'),
+            backgroundColor: Color(0xFFE53935),
+            duration: Duration(seconds: 3),
+          ),
+        );
+      }
+      // Do NOT rethrow — email failure must never block the unlock.
+    } catch (e) {
+      debugPrint('[PAY] Unexpected email error (non-fatal): $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('⚠️ Failed to send confirmation email'),
+            backgroundColor: Color(0xFFE53935),
+            duration: Duration(seconds: 3),
+          ),
+        );
       }
     }
   }
