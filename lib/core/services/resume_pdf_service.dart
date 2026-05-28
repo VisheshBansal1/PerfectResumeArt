@@ -14,31 +14,49 @@ import 'resume_pdf_web.dart'
 class ResumePdfService {
   static pw.Font? _regular;
   static pw.Font? _bold;
+  static pw.Font? _italic;
 
-  /// Downloads Roboto fonts once and caches them — supports full Unicode
+  /// Downloads Roboto fonts from reliable Google Fonts CDN with fallback URLs.
   static Future<void> _loadFonts() async {
     if (_regular != null && _bold != null) return;
-    try {
-      final regRes = await http.get(
-        Uri.parse(
-          'https://github.com/googlefonts/roboto/raw/main/src/hinted/Roboto-Regular.ttf',
-        ),
-      );
-      final boldRes = await http.get(
-        Uri.parse(
-          'https://github.com/googlefonts/roboto/raw/main/src/hinted/Roboto-Bold.ttf',
-        ),
-      );
-      if (regRes.statusCode == 200 && boldRes.statusCode == 200) {
-        _regular = pw.Font.ttf(regRes.bodyBytes.buffer.asByteData());
-        _bold = pw.Font.ttf(boldRes.bodyBytes.buffer.asByteData());
-        return;
+
+    // Primary: google/fonts repo (stable, well-known path)
+    // Fallback: googlefonts/roboto repo alternate path
+    final regularUrls = [
+      'https://github.com/google/fonts/raw/main/apache/roboto/static/Roboto-Regular.ttf',
+      'https://github.com/googlefonts/roboto-2/raw/main/src/hinted-base/Roboto-Regular.ttf',
+    ];
+    final boldUrls = [
+      'https://github.com/google/fonts/raw/main/apache/roboto/static/Roboto-Bold.ttf',
+      'https://github.com/googlefonts/roboto-2/raw/main/src/hinted-base/Roboto-Bold.ttf',
+    ];
+    final italicUrls = [
+      'https://github.com/google/fonts/raw/main/apache/roboto/static/Roboto-Italic.ttf',
+    ];
+
+    Future<Uint8List?> tryDownload(List<String> urls) async {
+      for (final url in urls) {
+        try {
+          final res = await http
+              .get(Uri.parse(url))
+              .timeout(const Duration(seconds: 10));
+          if (res.statusCode == 200 && res.bodyBytes.length > 10000) {
+            return res.bodyBytes;
+          }
+        } catch (_) {
+          continue;
+        }
       }
-    } catch (_) {
-      // Font load failed — fall back to Helvetica with ASCII-safe text
-      _regular = null;
-      _bold = null;
+      return null;
     }
+
+    final regBytes = await tryDownload(regularUrls);
+    final boldBytes = await tryDownload(boldUrls);
+    final itaBytes = await tryDownload(italicUrls);
+
+    if (regBytes != null) _regular = pw.Font.ttf(regBytes.buffer.asByteData());
+    if (boldBytes != null) _bold = pw.Font.ttf(boldBytes.buffer.asByteData());
+    if (itaBytes != null) _italic = pw.Font.ttf(itaBytes.buffer.asByteData());
   }
 
   Future<String> generatePdf({
@@ -47,22 +65,25 @@ class ResumePdfService {
   }) async {
     await _loadFonts();
 
-    // Replace Unicode symbols that Helvetica can't render when Roboto fails to load.
-    // When Roboto IS loaded these replacements still apply for consistency.
+    // Normalise smart punctuation regardless of font availability
     final safe = resumeText
-        .replaceAll(
-          '\u2022',
-          '-',
-        ) // bullet •  -> -  (PDF renderer uses its own bullet styling)
         .replaceAll('\u2013', '-') // en-dash
         .replaceAll('\u2014', '--') // em-dash
-        .replaceAll('\u20b9', 'Rs.') // ₹ -> Rs.
+        .replaceAll('\u20b9', 'Rs.') // ₹
         .replaceAll('\u2019', "'") // curly apostrophe
         .replaceAll('\u201c', '"')
         .replaceAll('\u201d', '"'); // curly quotes
+    // NOTE: we intentionally do NOT strip \u2022 (bullet •) here anymore.
+    // _buildPage handles it directly so the bullet glyph in the PDF
+    // always comes from _bulletChar() which is font-safe.
 
     final theme = _regular != null
-        ? pw.ThemeData.withFont(base: _regular!, bold: _bold ?? _regular!)
+        ? pw.ThemeData.withFont(
+            base: _regular!,
+            bold: _bold ?? _regular!,
+            italic: _italic ?? _regular!,
+            boldItalic: _bold ?? _regular!,
+          )
         : pw.ThemeData();
 
     final pdf = pw.Document(theme: theme);
@@ -89,6 +110,11 @@ class ResumePdfService {
     }
   }
 
+  /// Returns a bullet string that is safe for the current font.
+  /// When Roboto loaded successfully → coloured •
+  /// When only Helvetica is available → plain hyphen-minus (ASCII, always works)
+  String _bulletChar() => _regular != null ? '\u2022  ' : '-  ';
+
   List<pw.Widget> _buildPage(List<String> lines) {
     final widgets = <pw.Widget>[];
     bool nameWritten = false;
@@ -102,7 +128,7 @@ class ResumePdfService {
         continue;
       }
 
-      // ── First non-empty line = candidate name ──────────────────────────────
+      // ── Candidate name (first non-empty line) ─────────────────────────────
       if (!nameWritten) {
         nameWritten = true;
         widgets.add(
@@ -118,7 +144,7 @@ class ResumePdfService {
         continue;
       }
 
-      // ── Contact line (email, phone, LinkedIn, GitHub) ──────────────────────
+      // ── Contact line (email / phone / LinkedIn / GitHub) ──────────────────
       if (!contactWritten &&
           (line.contains('@') ||
               line.contains('+91') ||
@@ -144,7 +170,7 @@ class ResumePdfService {
         continue;
       }
 
-      // ── Section headers (ALLCAPS or known keywords) ────────────────────────
+      // ── Section headers ────────────────────────────────────────────────────
       if (_isSectionHeader(line)) {
         if (!firstSection) widgets.add(pw.SizedBox(height: 8));
         firstSection = false;
@@ -166,7 +192,7 @@ class ResumePdfService {
         continue;
       }
 
-      // ── Job / project line: "Company | Title | Dates" ─────────────────────
+      // ── Job / project row: "Company | Title | Dates" ──────────────────────
       if (line.contains('|') && !line.contains('@') && !_isBullet(line)) {
         final parts = line.split('|').map((s) => s.trim()).toList();
         widgets.add(pw.SizedBox(height: 5));
@@ -197,11 +223,10 @@ class ResumePdfService {
         continue;
       }
 
-      // ── Bullet points — handles •, -, * (AI resume uses all three) ─────────
+      // ── Bullet points ──────────────────────────────────────────────────────
       if (_isBullet(line)) {
-        // Strip leading whitespace then strip the bullet character + spaces
         final stripped = line.trimLeft();
-        // Remove •, -, or * at the start followed by optional spaces
+        // Strip leading bullet marker (•, -, *) and any following spaces
         final content = stripped.replaceFirst(RegExp(r'^[•\-\*]\s*'), '');
         widgets.add(
           pw.Padding(
@@ -210,7 +235,7 @@ class ResumePdfService {
               crossAxisAlignment: pw.CrossAxisAlignment.start,
               children: [
                 pw.Text(
-                  '•  ',
+                  _bulletChar(), // ← font-safe: • with Roboto, - with Helvetica
                   style: pw.TextStyle(
                     fontSize: 10,
                     fontWeight: pw.FontWeight.bold,
@@ -230,7 +255,7 @@ class ResumePdfService {
         continue;
       }
 
-      // ── Skills line "Label: values..." ────────────────────────────────────
+      // ── Skills line "Label: values" ───────────────────────────────────────
       final colonIdx = line.indexOf(':');
       if (colonIdx > 0 && colonIdx < 35 && !line.startsWith('http')) {
         final label = line.substring(0, colonIdx + 1);
@@ -275,27 +300,39 @@ class ResumePdfService {
     return widgets;
   }
 
-  /// Returns true if the line starts with a bullet character (•, -, *).
+  /// True if line starts with a bullet marker (•, -, *)
   bool _isBullet(String line) {
     final s = line.trimLeft();
-    return s.startsWith('•') || s.startsWith('- ') || s.startsWith('* ');
+    return s.startsWith('\u2022') || s.startsWith('- ') || s.startsWith('* ');
   }
 
   bool _isSectionHeader(String line) {
     final t = line.trim();
     if (t.length < 3 || t.length > 40) return false;
-    // All-caps line that isn't a contact detail
     if (t == t.toUpperCase() && !t.contains('@') && !t.contains('+'))
       return true;
-    // Known mixed-case section titles
     const known = [
-      'Experience', 'Work Experience', 'Professional Experience',
-      'Education', 'Skills', 'Technical Skills', 'Projects',
-      'Summary', 'Professional Summary', 'Objective',
-      'Certifications', 'Achievements', 'Awards', 'Publications',
-      // ALL-CAPS variants (matched by the rule above, but kept for safety)
-      'TECHNICAL SKILLS', 'WORK EXPERIENCE', 'PROFESSIONAL SUMMARY',
-      'EDUCATION', 'PROJECTS', 'EXPERIENCE', 'CERTIFICATIONS',
+      'Experience',
+      'Work Experience',
+      'Professional Experience',
+      'Education',
+      'Skills',
+      'Technical Skills',
+      'Projects',
+      'Summary',
+      'Professional Summary',
+      'Objective',
+      'Certifications',
+      'Achievements',
+      'Awards',
+      'Publications',
+      'TECHNICAL SKILLS',
+      'WORK EXPERIENCE',
+      'PROFESSIONAL SUMMARY',
+      'EDUCATION',
+      'PROJECTS',
+      'EXPERIENCE',
+      'CERTIFICATIONS',
     ];
     return known.any((h) => t.toLowerCase() == h.toLowerCase());
   }

@@ -391,14 +391,28 @@ No fabricated metrics. No invented projects. Only truthful, powerful rewrites.
 ${jobTitle.isNotEmpty ? 'Target Role: $jobTitle\n' : ''}
 
 EDITING RULES (every rule is mandatory):
-1. SUMMARY: Rewrite with the person's actual role, skills, and experience from the resume.
-2. BULLETS: Stronger WITHOUT inventing data.
-   - Start with a power verb (Built, Engineered, Designed, Led, Optimized, Automated, Delivered)
-   - Name the specific technology ("using Node.js and PostgreSQL" not "using backend tools")
-   - If a real metric EXISTS: preserve it. If not: do NOT add a fake one.
+1. SUMMARY: Rewrite to sound like a SENIOR ENGINEER wrote it — specific, technical, confident.
+   BANNED phrases: "leverage my skills", "seeking to contribute", "specializing in", "passionate about"
+   Instead: name the real technical complexity of their work (architectures, patterns, real tech choices).
+   BAD: "2 years experienced Flutter Developer specializing in Flutter, Firebase, and REST APIs"
+   GOOD: "Flutter engineer with 2 years shipping production apps — architected multi-module mobile
+   systems with Riverpod state management, Firestore real-time data architecture, and Firebase Auth
+   role-based access control."
+
+2. BULLETS: Deeper AND stronger WITHOUT inventing data.
+   - Start with a power verb (Architected, Engineered, Designed, Optimized, Automated, Delivered)
+   - Name the specific technology and the ENGINEERING DECISION, not just the feature
+   - If a real metric EXISTS: preserve it exactly. If not: describe WHAT + HOW technically.
+   BAD (shallow): "Integrated Razorpay payment gateway"
+   GOOD (deep): "Engineered multi-tier purchase flow using Razorpay with Firebase-backed entitlement
+   checks, supporting one-time and subscription models with server-side receipt validation"
+   PRESERVE technical terms from the original: offline support, cloud sync, entitlement checks,
+   stakeholder collaboration, production codebase — these signal engineering maturity.
+
 3. STRUCTURE: Standard ATS headers — PROFESSIONAL SUMMARY | WORK EXPERIENCE | TECHNICAL SKILLS | PROJECTS | EDUCATION
-4. Keep ALL original content. Remove nothing.
-5. No fake companies, degrees, projects, or metrics.
+4. SKILLS: Never repeat a technology in two categories. Flutter = Frameworks only (not also Mobile Dev). Firebase = Cloud only (not DevOps).
+5. Keep ALL original content. Remove nothing. Never simplify or genericize existing technical language.
+6. No fake companies, degrees, projects, or metrics.
 
 ORIGINAL RESUME:
 $resumeText
@@ -719,11 +733,36 @@ $projText
 MANDATORY WRITING RULES — every rule must be followed:
 ════════════════════════════════════════════════════════════
 
-RULE 1 — PROFESSIONAL SUMMARY (exactly 3 lines):
-- Line 1: "[X yrs] experienced [specific role title] specializing in [2-3 core technologies from their stack]"
-- Line 2: Use ONLY achievements that appear verbatim in the resume with their real numbers.
-  If no numbers exist, write: "Delivered [specific project/feature] and [specific technical contribution]" — no invented figures.
-- Line 3: "Seeking [targetRole] at a [company type] to [specific value proposition based on their actual background]"
+RULE 1 — PROFESSIONAL SUMMARY (3 lines, written like a SENIOR ENGINEER, not a template):
+Write a summary that a real senior engineer would write — specific, technical, and confident.
+NEVER use these banned phrases (recruiters see them 1000x/day and auto-reject):
+  ✗ "leverage my skills"   ✗ "seeking to contribute"   ✗ "passionate about"
+  ✗ "experienced [role] specializing in"   ✗ "to leverage my skills at a [company type]"
+  ✗ Any fill-in-the-blank sounding sentence
+
+INSTEAD — write 3 natural sentences that:
+- Line 1: Name the exact discipline and years, reference the most technically complex thing
+  they've actually built (from the resume). Example: "Flutter engineer with 2 years building
+  production-grade mobile apps — from real-time Firestore-synced dashboards to Razorpay
+  payment flows with Firebase-backed entitlement checks."
+- Line 2: Highlight the most impressive TECHNICAL decision or architecture pattern from their
+  actual work (state management strategy, data architecture, auth system, etc.)
+  If real metrics exist in the resume, use them here.
+- Line 3: What kind of work they want next — stated as a technical ambition, not a job search.
+  Example: "Looking to go deeper on scalable mobile architecture and ship products that handle
+  real engineering complexity at the feature level."
+
+GOOD summary (natural, technical, specific):
+  "Flutter engineer with 2 years shipping production apps — built real-time institutional
+  dashboards with Riverpod state management, Firestore multi-role data architecture, and
+  role-based Firebase Auth flows. Most recently architected a multi-module Flutter app
+  covering attendance, messaging, and admin panels, collaborating directly with stakeholders
+  on a live production codebase. Currently deepening expertise in scalable mobile architecture
+  and AI-integrated mobile products."
+
+BAD summary (template, generic, auto-rejected):
+  "2 years experienced Flutter Developer specializing in Flutter, Firebase, and REST APIs.
+  Seeking Flutter Developer at a startup to leverage my skills in building scalable applications."
 
 RULE 2 — EXPERIENCE BULLETS (MOST CRITICAL FOR ATS SCORE):
 Every single bullet MUST follow this formula:
@@ -740,24 +779,69 @@ Metric rules — HONESTY IS MANDATORY:
     NEVER add "~6,000 users", "~120ms latency", "~92% crash-free" unless the source says so.
   - NEVER invent companies, roles, projects, or figures not present in the data.
 
-BAD (fabricating numbers): "Engineered REST APIs serving ~6,000 daily requests with ~120ms latency"
-GOOD (honest, no invented metric): "Engineered RESTful APIs using Node.js and Firebase for real-time data sync"
+TECHNICAL DEPTH — write like a senior engineer, not a junior listing features:
+BAD (shallow, feature-listing): "Integrated Razorpay payment gateway"
+GOOD (deep, engineering-level): "Engineered a multi-tier purchase flow using Razorpay with Firebase-backed entitlement checks, supporting both one-time and subscription models"
 
-BAD (fabricating users): "Built Flutter app supporting ~3,500 registered users"
-GOOD (honest): "Built a cross-platform Flutter application with Firebase Auth and Firestore for role-based access control"
+BAD (shallow): "Used Firebase for real-time data"
+GOOD (deep): "Designed Firestore data architecture supporting real-time sync across 3 distinct user roles with optimistic UI updates via Riverpod stream providers"
+
+BAD (shallow): "Built admin dashboard"
+GOOD (deep): "Architected role-gated admin dashboard using Firebase Auth custom claims and Riverpod scoped providers, enabling attendance tracking and internal messaging from a unified multi-module codebase"
+
+BAD (shallow, fabricating numbers): "Built Flutter app supporting ~3,500 registered users"
+GOOD (honest, no invented metric): "Built a cross-platform Flutter application with Firebase Auth and Firestore for role-based access control across Android and iOS"
 
 If the source resume says "~70% reduction in manual effort" → keep it exactly.
-If the source resume says nothing about scale → describe WHAT was built and HOW, not made-up numbers.
+If the source resume mentions: offline support, cloud sync, entitlement checks, stakeholder collaboration,
+third-party integrations, production codebase — KEEP these terms, they signal engineering maturity.
+NEVER simplify or genericize existing technical language from the source.
 
-RULE 3 — SKILLS SECTION:
-Group by these exact labels (include only skills actually in their data):
-  Programming Languages | Frontend Technologies | Backend Technologies |
-  Databases & Storage | Cloud & DevOps | Mobile Development | Tools & Frameworks
+RULE 3 — SKILLS SECTION (no duplication, no wrong categorisation):
+Use ONLY these labels (omit any category if the candidate has no skills for it):
+  Programming Languages | Frameworks & Libraries | Backend & APIs |
+  Databases & Storage | Cloud & Infrastructure | Tools & DevOps
 
-RULE 4 — PROJECTS (make them stand out):
+DEDUPLICATION RULE — MANDATORY:
+  - Each technology appears in EXACTLY ONE category. Never repeat a skill across categories.
+  - Flutter belongs in "Frameworks & Libraries" ONLY — not also in "Mobile Development"
+  - Firebase belongs in "Cloud & Infrastructure" ONLY — it is NOT DevOps
+  - Riverpod, GetX, Provider, BLoC → "Frameworks & Libraries"
+  - REST APIs, GraphQL, gRPC → "Backend & APIs"
+  - Git, GitHub, Android Studio, VS Code, Postman → "Tools & DevOps"
+  - Do NOT create a "Mobile Development" category if you already have Flutter elsewhere
+
+WRONG (duplication + wrong categorisation):
+  Frontend Technologies: Flutter
+  Mobile Development: Flutter         ← duplicate
+  Cloud & DevOps: Firebase            ← Firebase is not DevOps
+
+CORRECT:
+  Programming Languages: Dart, Python
+  Frameworks & Libraries: Flutter, Riverpod
+  Backend & APIs: REST APIs, Firebase Firestore (via SDK)
+  Databases & Storage: Firebase Firestore, Hive
+  Cloud & Infrastructure: Firebase (Auth, Storage, Functions)
+  Tools & DevOps: Git, GitHub, Android Studio, VS Code
+
+RULE 4 — PROJECTS (write at the level of a senior engineer's portfolio):
   Line 1: "[Project Name] | [Tech Stack] | [Live/GitHub link if found in existing resume]"
-  - "Built [what it does + problem it solves] using [specific tech]"
-  - "[Technical achievement or real metric if present in resume] — [how it was implemented]"
+
+  Each project needs 2 bullets minimum:
+  Bullet 1 — WHAT + HOW (technical architecture, not just a feature list):
+    Name the core technical challenge and the engineering decision made to solve it.
+    BAD: "Built a quiz app with leaderboards"
+    GOOD: "Engineered real-time 1v1 quiz battles using Firestore streams and Firebase Realtime Database for game-state sync, with anti-cheat mechanisms and live leaderboard updates via Riverpod stream providers"
+
+  Bullet 2 — TECHNICAL DEPTH or REAL METRIC (no invented numbers):
+    If real metric exists in source (e.g. "~50% reduction") → use it exactly.
+    If no metric → describe the hardest technical sub-problem solved (data architecture,
+    auth flow, offline sync, payment entitlement, state management pattern, etc.)
+    BAD: "Integrated Razorpay for payments"
+    GOOD: "Built subscription and one-time purchase flow with Firebase-backed entitlement checks — purchase state persisted in Firestore and validated before granting access to premium AI analysis tiers"
+
+  Never describe a project as just "a [type] app with [feature]" — describe the
+  ENGINEERING DECISIONS and TECHNICAL PROBLEMS solved.
 
 RULE 5 — CONTACT HEADER:
   $fullName
