@@ -575,6 +575,67 @@ class AiService {
   static const String _primaryModel = 'llama-3.3-70b-versatile';
   static const String _classifierModel = 'llama-3.1-8b-instant';
 
+  // ─── Resume Text Limit ───────────────────────────────────────────────────────
+  // Groq's context window is ~32k tokens. Each analysis prompt template already
+  // uses ~1,500–2,000 tokens for instructions, leaving ~28k tokens for the resume.
+  // 12,000 characters ≈ 3,000 tokens — a very generous limit that fits even
+  // verbose, multi-page resumes while keeping total prompt size safe.
+  // If a PDF is scanned at high DPI the OCR output can balloon to 30k+ characters;
+  // truncating here prevents the 413 / "too long" error from the backend.
+  static const int _maxResumeChars = 12000;
+
+  /// Strips Wingdings/Symbol-font private-use glyphs from OCR text so the AI
+  /// model never sees (and copies) characters that render as ⊠ in Flutter.
+  static String _sanitizeOcrBullets(String text) {
+    const badGlyphs = [
+      '\u2022',
+      '\u00B7',
+      '\u2023',
+      '\u25C6',
+      '\u25C7',
+      '\u25AA',
+      '\u25B8',
+      '\u25B6',
+      '\u25CF',
+      '\u25CB',
+      '\u25A0',
+      '\u25A1',
+      '\u27A4',
+      '\u27A2',
+      '\u2726',
+      '\u2727',
+      '\u2714',
+      '\u2713',
+      '\u2605',
+      '\u2606',
+      '\u22A0',
+      '\uF0B7',
+      '\uF0A7',
+    ];
+    String result = text;
+    for (final g in badGlyphs) result = result.replaceAll(g, '-');
+    // Catch-all: any non-ASCII-printable character at line start before a space
+    result = result.replaceAllMapped(
+      RegExp(r'^([^\u0020-\u007E\u00C0-\u024F\r\n])(?=[ \t])', multiLine: true),
+      (_) => '-',
+    );
+    return result;
+  }
+
+  /// Truncates [text] to [_maxResumeChars] at a word boundary and appends a
+  /// note so the AI knows the input was clipped.
+  String _safeResumeText(String text) {
+    final trimmed = text.trim();
+    if (trimmed.length <= _maxResumeChars) return trimmed;
+
+    // Cut at the last whitespace before the limit so we don't break a word.
+    int cutAt = _maxResumeChars;
+    while (cutAt > 0 && trimmed[cutAt] != ' ' && trimmed[cutAt] != '\n') {
+      cutAt--;
+    }
+    return '${trimmed.substring(0, cutAt)}\n\n[Resume truncated to fit context window — end of text omitted]';
+  }
+
   // ─── Public API ──────────────────────────────────────────────────────────────
 
   /// Full analysis against an admin-created job role.
@@ -597,7 +658,10 @@ class AiService {
       );
     }
     final response = await _callGroqWithRetry(
-      _buildFullAnalysisPrompt(resumeText, job),
+      _buildFullAnalysisPrompt(
+        _safeResumeText(_sanitizeOcrBullets(resumeText)),
+        job,
+      ),
       model: _primaryModel,
       maxTokens: 4096,
     );
@@ -646,7 +710,12 @@ class AiService {
     }
 
     final response = await _callGroqWithRetry(
-      _buildCustomTechPrompt(resumeText, jobTitle, requiredSkills, description),
+      _buildCustomTechPrompt(
+        _safeResumeText(_sanitizeOcrBullets(resumeText)),
+        jobTitle,
+        requiredSkills,
+        description,
+      ),
       model: _primaryModel,
       maxTokens: 4096,
     );
@@ -678,7 +747,7 @@ class AiService {
     }
 
     final response = await _callGroqWithRetry(
-      _buildAtsOnlyPrompt(resumeText),
+      _buildAtsOnlyPrompt(_safeResumeText(_sanitizeOcrBullets(resumeText))),
       model: _primaryModel,
       maxTokens: 4096,
     );

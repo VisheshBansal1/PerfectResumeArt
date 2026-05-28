@@ -2,18 +2,162 @@ import 'dart:convert';
 import 'package:http/http.dart' as http;
 import 'package:next_hire/core/services/app_config.dart';
 
-/// Holds the fully improved resume with before/after data + ATS scores
+// ─── Data Models ──────────────────────────────────────────────────────────────
+
+/// Granular ATS score broken down by category so the user knows exactly
+/// where points are lost and how to recover them.
+class AtsSectionScore {
+  final String category;
+  final int score;
+  final int maxScore;
+  final String verdict; // short label e.g. "Strong", "Needs Work"
+  final String tip; // one specific fix
+
+  const AtsSectionScore({
+    required this.category,
+    required this.score,
+    required this.maxScore,
+    required this.verdict,
+    required this.tip,
+  });
+
+  double get pct => maxScore > 0 ? score / maxScore : 0;
+
+  factory AtsSectionScore.fromMap(Map<String, dynamic> m) => AtsSectionScore(
+    category: m['category'] as String? ?? '',
+    score: (m['score'] as num?)?.toInt().clamp(0, 100) ?? 0,
+    maxScore: (m['maxScore'] as num?)?.toInt() ?? 10,
+    verdict: m['verdict'] as String? ?? '',
+    tip: m['tip'] as String? ?? '',
+  );
+}
+
+/// Something the candidate is missing — shown with exact point value they'd gain.
+class MissingItem {
+  final String item; // what is missing
+  final int pointsToGain; // how many ATS points adding it would give
+  final String howToAdd; // concrete instruction
+  final String priority; // 'critical' | 'high' | 'medium'
+  final String section; // which section to add it to
+
+  const MissingItem({
+    required this.item,
+    required this.pointsToGain,
+    required this.howToAdd,
+    required this.priority,
+    required this.section,
+  });
+
+  factory MissingItem.fromMap(Map<String, dynamic> m) => MissingItem(
+    item: m['item'] as String? ?? '',
+    pointsToGain: (m['pointsToGain'] as num?)?.toInt() ?? 0,
+    howToAdd: m['howToAdd'] as String? ?? '',
+    priority: m['priority'] as String? ?? 'medium',
+    section: m['section'] as String? ?? '',
+  );
+
+  String get priorityEmoji {
+    switch (priority) {
+      case 'critical':
+        return '🚨';
+      case 'high':
+        return '🔥';
+      default:
+        return '💡';
+    }
+  }
+}
+
+/// Full generated resume with rich analysis metadata.
+class GeneratedResume {
+  final String resumeText;
+  final String summary;
+
+  // ATS scores
+  final int atsScoreBefore; // score of uploaded/existing resume (0 if none)
+  final int atsScoreAfter; // score of newly generated resume
+  final bool hadExistingResume; // whether we had a baseline to compare
+
+  // Section breakdown
+  final List<AtsSectionScore> sectionScores;
+
+  // Missing items with point values
+  final List<MissingItem> missingItems;
+
+  // Existing strengths
+  final List<String> keyStrengths;
+
+  // Job-fit
+  final List<String> suggestedRoles;
+  final List<String> topKeywords;
+
+  // Bonus
+  final String linkedinSummary;
+  final List<String> improvementTips;
+
+  const GeneratedResume({
+    required this.resumeText,
+    required this.summary,
+    required this.atsScoreBefore,
+    required this.atsScoreAfter,
+    required this.hadExistingResume,
+    required this.sectionScores,
+    required this.missingItems,
+    required this.keyStrengths,
+    required this.suggestedRoles,
+    required this.topKeywords,
+    required this.linkedinSummary,
+    this.improvementTips = const [],
+  });
+
+  int get atsScore => atsScoreAfter;
+  int get atsImprovement => atsScoreAfter - atsScoreBefore;
+
+  factory GeneratedResume.fromMap(
+    Map<String, dynamic> m, {
+    bool hadExisting = false,
+  }) {
+    return GeneratedResume(
+      resumeText: m['resumeText'] as String? ?? '',
+      summary: m['summary'] as String? ?? '',
+      atsScoreBefore: (m['atsScoreBefore'] as num?)?.toInt().clamp(0, 100) ?? 0,
+      atsScoreAfter: (m['atsScoreAfter'] as num?)?.toInt().clamp(0, 100) ?? 70,
+      hadExistingResume: hadExisting,
+      sectionScores: (m['sectionScores'] as List? ?? [])
+          .whereType<Map<String, dynamic>>()
+          .map(AtsSectionScore.fromMap)
+          .toList(),
+      missingItems: (m['missingItems'] as List? ?? [])
+          .whereType<Map<String, dynamic>>()
+          .map(MissingItem.fromMap)
+          .toList(),
+      keyStrengths: _strList(m, 'keyStrengths'),
+      suggestedRoles: _strList(m, 'suggestedRoles'),
+      topKeywords: _strList(m, 'topKeywords'),
+      linkedinSummary: m['linkedinSummary'] as String? ?? '',
+      improvementTips: _strList(m, 'improvementTips'),
+    );
+  }
+
+  static List<String> _strList(Map<String, dynamic> m, String k) {
+    final v = m[k];
+    if (v is List) return v.map((e) => e.toString()).toList();
+    return [];
+  }
+}
+
+// ─── Existing models (unchanged) ─────────────────────────────────────────────
+
 class ImprovedResume {
   final String originalText;
   final String improvedText;
   final String improvedSummary;
-  final List<Map<String, String>>
-  bulletChanges; // [{original, improved, reason}]
+  final List<Map<String, String>> bulletChanges;
   final List<String> impactAdded;
   final int atsScoreBefore;
   final int atsScoreAfter;
   final List<String> sectionsImproved;
-  final List<ActionableSuggestion> actionableSuggestions; // Real things to do
+  final List<ActionableSuggestion> actionableSuggestions;
 
   const ImprovedResume({
     required this.originalText,
@@ -65,12 +209,10 @@ class ImprovedResume {
   }
 }
 
-/// Real actionable suggestion — things the user can actually do
 class ActionableSuggestion {
-  final String
-  type; // 'add_link' | 'learn_skill' | 'add_project' | 'certification' | 'structure'
-  final String suggestion; // The actual advice
-  final String priority; // 'high' | 'medium' | 'low'
+  final String type;
+  final String suggestion;
+  final String priority;
 
   const ActionableSuggestion({
     required this.type,
@@ -103,7 +245,6 @@ class ActionableSuggestion {
   }
 }
 
-/// JD optimization result
 class JdOptimizedResume {
   final String originalText;
   final String optimizedText;
@@ -138,12 +279,11 @@ class JdOptimizedResume {
   }
 }
 
-/// Why-you-get-rejected result
 class RejectionReason {
-  final String category; // e.g. "Impact", "Metrics", "Summary"
-  final String verdict; // brutal one-liner
-  final String fix; // specific fix
-  final String severity; // "critical" | "high" | "medium"
+  final String category;
+  final String verdict;
+  final String fix;
+  final String severity;
 
   const RejectionReason({
     required this.category,
@@ -160,7 +300,6 @@ class RejectionReason {
   );
 }
 
-/// Project improvement result
 class ImprovedProject {
   final String original;
   final String improved;
@@ -173,7 +312,6 @@ class ImprovedProject {
   });
 }
 
-/// "Add these to get selected" result
 class SelectionBooster {
   final List<String> projectsToAdd;
   final List<String> skillsToAdd;
@@ -203,49 +341,6 @@ class SelectionBooster {
     return [];
   }
 }
-
-// ─── Generated Resume ─────────────────────────────────────────────────────────
-
-class GeneratedResume {
-  final String resumeText;
-  final String summary;
-  final int atsScore;
-  final List<String> keyStrengths;
-  final List<String> suggestedRoles;
-  final List<String> topKeywords;
-  final String linkedinSummary;
-  final List<String> improvementTips;
-
-  const GeneratedResume({
-    required this.resumeText,
-    required this.summary,
-    required this.atsScore,
-    required this.keyStrengths,
-    required this.suggestedRoles,
-    required this.topKeywords,
-    required this.linkedinSummary,
-    this.improvementTips = const [],
-  });
-
-  factory GeneratedResume.fromMap(Map<String, dynamic> m) => GeneratedResume(
-    resumeText: m['resumeText'] as String? ?? '',
-    summary: m['summary'] as String? ?? '',
-    atsScore: (m['atsScore'] as num?)?.toInt().clamp(0, 100) ?? 70,
-    keyStrengths: _strList(m, 'keyStrengths'),
-    suggestedRoles: _strList(m, 'suggestedRoles'),
-    topKeywords: _strList(m, 'topKeywords'),
-    linkedinSummary: m['linkedinSummary'] as String? ?? '',
-    improvementTips: _strList(m, 'improvementTips'),
-  );
-
-  static List<String> _strList(Map<String, dynamic> m, String k) {
-    final v = m[k];
-    if (v is List) return v.map((e) => e.toString()).toList();
-    return [];
-  }
-}
-
-// ─── Generator input models ───────────────────────────────────────────────────
 
 class ExperienceEntry {
   final String company;
@@ -278,78 +373,54 @@ class ProjectEntry {
 }
 
 // ─── Service ───────────────────────────────────────────────────────────────────
-class ResumeImproveService {
-  // GROQ_API_KEY removed — AI calls proxy through backend.
-  // See AiService._callGroq() which posts to AppConfig.backendUrl/api/ai/chat
-  // Calls backend proxy → backend calls Groq with server-side API key
-  static const String _model = 'llama-3.3-70b-versatile';
 
-  // ── 1. Fix My Resume — full rewrite ────────────────────────────────────────
+class ResumeImproveService {
+  static const String _model = 'llama-3.3-70b-versatile';
+  static const String _fastModel = 'llama-3.3-70b-versatile';
+
+  // ── 1. Fix My Resume ────────────────────────────────────────────────────────
   Future<ImprovedResume> fixResume({
     required String resumeText,
     String jobTitle = '',
   }) async {
     final prompt =
         '''
-You are an expert resume editor. Improve this resume based ONLY on what is actually there.
-No fabricated metrics. No invented projects. Only honest improvements.
+You are an expert resume editor and certified ATS consultant. Improve this resume honestly.
+No fabricated metrics. No invented projects. Only truthful, powerful rewrites.
 
 ${jobTitle.isNotEmpty ? 'Target Role: $jobTitle\n' : ''}
 
-EDITING RULES (follow strictly):
-1. SUMMARY: Rewrite to be specific — use the person's actual role, skills, and experience shown in the resume.
-2. BULLETS: Make each clearer and stronger WITHOUT inventing numbers.
-   - Start with a strong action verb (Built, Developed, Designed, Led, Optimized, Implemented)
-   - Name the specific technology used ("using Node.js" not just "using a backend technology")
-   - If a real metric EXISTS in the resume: keep it. If not: DO NOT add a fake ~number.
-   - "Worked on backend" → "Developed RESTful APIs using Node.js and PostgreSQL" (no fake metric)
-   - "Made Flutter app" → "Built a Flutter mobile application with Firebase authentication and Firestore database"
-3. STRUCTURE: Ensure standard ATS headers: Professional Summary | Work Experience | Education | Technical Skills | Projects
-4. Keep ALL original content — do not remove any information.
-5. Do NOT add fake companies, degrees, projects, or metrics.
+EDITING RULES (every rule is mandatory):
+1. SUMMARY: Rewrite with the person's actual role, skills, and experience from the resume.
+2. BULLETS: Stronger WITHOUT inventing data.
+   - Start with a power verb (Built, Engineered, Designed, Led, Optimized, Automated, Delivered)
+   - Name the specific technology ("using Node.js and PostgreSQL" not "using backend tools")
+   - If a real metric EXISTS: preserve it. If not: do NOT add a fake one.
+3. STRUCTURE: Standard ATS headers — PROFESSIONAL SUMMARY | WORK EXPERIENCE | TECHNICAL SKILLS | PROJECTS | EDUCATION
+4. Keep ALL original content. Remove nothing.
+5. No fake companies, degrees, projects, or metrics.
 
-STEP 1: Score the ORIGINAL resume ATS compatibility (0-100).
-STEP 2: Rewrite following the rules above.
-STEP 3: Score the IMPROVED resume (must be higher than original).
-STEP 4: Generate ACTIONABLE SUGGESTIONS — real specific things this person should do.
-
-For actionable suggestions, analyze what's missing and give honest advice:
-- No GitHub/portfolio link → suggest adding it specifically
-- No project links → suggest deploying their existing projects  
-- Vague project descriptions → tell them what to add (tech stack, what problem it solves)
-- Missing certifications → recommend free ones relevant to their specific tech stack
-- Thin skills section → suggest specific skills to learn based on what they already know
-- No metrics anywhere → explain HOW to get real metrics (track downloads, measure performance, etc.)
-
-RESUME:
+ORIGINAL RESUME:
 $resumeText
 
 Return ONLY valid JSON:
 {
-  "improvedText": "<complete improved resume — all sections — plain text>",
-  "improvedSummary": "<2-3 line summary based on their actual experience>",
-  "atsScoreBefore": <0-100>,
-  "atsScoreAfter":  <0-100, must be higher>,
-  "sectionsImproved": ["<names of sections changed>"],
+  "improvedText": "<complete improved resume in plain text>",
+  "improvedSummary": "<2-3 line summary using their actual experience>",
+  "atsScoreBefore": <integer 0-100>,
+  "atsScoreAfter": <integer 0-100, must exceed atsScoreBefore>,
+  "sectionsImproved": ["<section names changed>"],
   "bulletChanges": [
-    {
-      "original": "<exact original line>",
-      "improved": "<honest rewrite — no fake metrics>",
-      "reason":   "<what was improved: e.g. Added action verb, Named specific tech, Clarified outcome>"
-    }
+    {"original": "<exact line>", "improved": "<honest rewrite>", "reason": "<what improved>"}
   ],
-  "impactAdded": ["<only real metrics that were ALREADY in resume and preserved>"],
+  "impactAdded": ["<only real metrics already in the resume>"],
   "actionableSuggestions": [
-    {
-      "type": "add_link",
-      "suggestion": "<specific advice for THIS resume>",
-      "priority": "high"
-    }
+    {"type": "add_link|learn_skill|add_project|certification|structure", "suggestion": "<specific advice>", "priority": "high|medium|low"}
   ]
 }
 ''';
 
-    final raw = await _call(prompt, maxTokens: 4096);
+    final raw = await _call(prompt, maxTokens: 2500, model: _fastModel);
     final data = _decode(raw);
     return ImprovedResume.fromMap(data, resumeText);
   }
@@ -361,14 +432,14 @@ Return ONLY valid JSON:
   }) async {
     final prompt =
         '''
-You are an expert ATS consultant. Your job: optimize this resume to maximally match the given Job Description.
+You are an expert ATS consultant. Optimize this resume to maximally match the Job Description.
 
 RULES:
 1. Extract all important keywords, skills, and phrases from the JD.
-2. Naturally embed missing keywords into existing bullet points (don't add fake experience).
+2. Naturally embed missing keywords into existing bullet points (don't fabricate experience).
 3. Rephrase existing bullets to mirror JD language where semantically equivalent.
-4. Add any missing but truthfully inferable skills to the Skills section.
-5. Adjust Summary/Objective to directly echo the JD's requirements.
+4. Add missing but truthfully inferable skills to the Skills section.
+5. Adjust Summary to directly echo the JD requirements.
 6. Do NOT fabricate roles, projects, or companies.
 
 JOB DESCRIPTION:
@@ -377,16 +448,16 @@ $jobDescription
 RESUME:
 $resumeText
 
-Respond ONLY as valid JSON:
+Return ONLY valid JSON:
 {
   "optimizedText": "<full optimized resume as plain text>",
-  "keywordsAdded": ["keyword1", "keyword2", ...],
-  "linesChanged": ["BEFORE: ... → AFTER: ...", ...],
-  "estimatedAtsBoost": <integer 0-100 — expected ATS score increase>
+  "keywordsAdded": ["keyword1", "keyword2"],
+  "linesChanged": ["BEFORE: ... → AFTER: ..."],
+  "estimatedAtsBoost": <integer 0-100>
 }
 ''';
 
-    final raw = await _call(prompt, maxTokens: 4096);
+    final raw = await _call(prompt, maxTokens: 2500, model: _fastModel);
     final data = _decode(raw);
     return JdOptimizedResume.fromMap(data, resumeText);
   }
@@ -399,39 +470,29 @@ Respond ONLY as valid JSON:
     final prompt =
         '''
 You are a senior technical recruiter who has reviewed 10,000+ resumes.
-Analyze THIS specific resume honestly. Reference their actual content in your feedback.
+Analyze THIS specific resume honestly. Reference actual content in your feedback.
 
 ${jobTitle.isNotEmpty ? 'Role: applying for $jobTitle.\n' : ''}
 
 Analyze these areas based on what is ACTUALLY in the resume:
-- ACTION_VERBS: Do bullets start with strong verbs or are they passive?
-- SPECIFICITY: Are technologies named specifically or vague?
-- METRICS: Does the resume have real numbers anywhere?
-- SUMMARY: Does a summary exist? Is it role-specific?
-- PROJECTS: Described with tech stack and outcome? Or just project names?
-- ATS_STRUCTURE: Standard section headers? Field-relevant keywords?
-- FIRST_IMPRESSION: What stands out (or doesn't) in the first 6 seconds?
-- COMPLETENESS: Missing contact info, GitHub, or key sections?
+ACTION_VERBS | SPECIFICITY | METRICS | SUMMARY | PROJECTS | ATS_STRUCTURE | FIRST_IMPRESSION | COMPLETENESS
 
 RESUME:
 $resumeText
-
-For EACH issue: reference their actual content, give a specific fix that applies to THIS resume.
 
 Return ONLY valid JSON:
 {
   "reasons": [
     {
       "category": "<dimension>",
-      "verdict": "<honest verdict referencing their specific resume content>",
-      "fix": "<actionable fix specific to their resume — not generic advice>",
-      "severity": "critical"
+      "verdict": "<honest verdict referencing their specific content>",
+      "fix": "<actionable fix specific to their resume>",
+      "severity": "critical|high|medium"
     }
   ]
 }
-
 Severity: "critical" (auto-rejected), "high" (lowers ranking), "medium" (minor gap).
-Include 5-7 reasons. Be specific to THIS resume.
+Include 5-7 reasons.
 ''';
 
     final raw = await _call(prompt, maxTokens: 1500);
@@ -450,14 +511,14 @@ Include 5-7 reasons. Be specific to THIS resume.
   }) async {
     final prompt =
         '''
-You are an expert resume writer. Transform this weak project description into an impressive one for a tech resume.
+Transform this weak project description into an impressive one for a tech resume.
 
 RULES:
 - Start with a strong action verb (Built, Developed, Engineered, Designed, Architected)
 - Include tech stack used
-- Add measurable impact or scale (users, performance, downloads — estimate with ~ if unknown)
-- Maximum 2 sentences or 30 words
-- Sound impressive but believable
+- Add measurable impact (estimate with ~ if unknown)
+- Maximum 2 sentences / 30 words
+- Believable and impressive
 
 Original: "$projectLine"
 ${context.isNotEmpty ? 'Context: $context' : ''}
@@ -480,7 +541,6 @@ Return ONLY valid JSON:
     );
   }
 
-  // ── 5. "Add These to Get Selected" ────────────────────────────────────────
   // ── 5. Selection Booster ──────────────────────────────────────────────────
   Future<SelectionBooster> getSelectionBoosters({
     required String resumeText,
@@ -489,43 +549,27 @@ Return ONLY valid JSON:
     final targetRole = jobTitle.isNotEmpty ? jobTitle : 'software developer';
     final prompt =
         '''
-You are a senior tech recruiter who has reviewed 10,000+ resumes. Analyze this SPECIFIC resume and tell the candidate what to add to get more interviews.
+You are a senior tech recruiter. Analyze this SPECIFIC resume and tell the candidate what to add to get more interviews.
 
 Target Role: $targetRole
 
 CANDIDATE RESUME:
 $resumeText
 
-STRICT RULES — violating these makes your response useless:
-1. Reference ACTUAL project names, company names from the resume above.
-2. Metric suggestions must name a REAL project from the resume (not a placeholder).
+RULES — violating these makes your response useless:
+1. Reference ACTUAL project names, company names from the resume.
+2. Metric suggestions must name a REAL project from the resume.
 3. Skill suggestions must logically extend their EXISTING tech stack.
 4. Project suggestions must be buildable using their current skills.
-5. NEVER give generic advice that could apply to anyone — be specific to THIS resume.
+5. NEVER give generic advice — be specific to THIS resume.
 
 Return ONLY valid JSON (no markdown):
 {
-  "priorityAction": "<the single most impactful action this week, referencing something from their resume>",
-  "projectsToAdd": [
-    "<project using their exact stack> — reason: <why this helps their specific profile>",
-    "<project using their exact stack> — reason: <why this helps their specific profile>",
-    "<project using their exact stack> — reason: <why this helps their specific profile>"
-  ],
-  "skillsToAdd": [
-    "<skill that directly extends what they already know> — complements their <specific skill> — learn in <time>",
-    "<skill that directly extends what they already know> — complements their <specific skill> — learn in <time>",
-    "<skill that directly extends what they already know> — complements their <specific skill> — learn in <time>"
-  ],
-  "metricsToAdd": [
-    "Add to <EXACT project name from resume>: <concrete metric like ~2,000 daily users or 45% faster>",
-    "Add to <EXACT project name from resume>: <concrete metric>",
-    "Add to <EXACT project name from resume>: <concrete metric>"
-  ],
-  "keywordsToAdd": [
-    "<exact keyword missing from resume> — add to: <section name>",
-    "<exact keyword missing from resume> — add to: <section name>",
-    "<exact keyword missing from resume> — add to: <section name>"
-  ]
+  "priorityAction": "<the single most impactful action this week>",
+  "projectsToAdd": ["<project using their exact stack> — reason: <why>"],
+  "skillsToAdd": ["<skill extending what they know> — complements <specific skill> — learn in <time>"],
+  "metricsToAdd": ["Add to <EXACT project name>: <concrete metric>"],
+  "keywordsToAdd": ["<exact missing keyword> — add to: <section name>"]
 }
 ''';
 
@@ -534,7 +578,7 @@ Return ONLY valid JSON (no markdown):
     return SelectionBooster.fromMap(data);
   }
 
-  // ── 6. Bundle: Fix + JD Optimize in one call ──────────────────────────────
+  // ── 6. Bundle ──────────────────────────────────────────────────────────────
   Future<Map<String, dynamic>> fullBundleUpgrade({
     required String resumeText,
     required String jobDescription,
@@ -555,7 +599,7 @@ Return ONLY valid JSON (no markdown):
     };
   }
 
-  // ── 7. AI Resume Generator ────────────────────────────────────────────────
+  // ── 7. AI Resume Generator — ELITE VERSION ────────────────────────────────
   Future<GeneratedResume> generateResume({
     required String fullName,
     required String email,
@@ -567,140 +611,391 @@ Return ONLY valid JSON (no markdown):
     required String education,
     required String skills,
     required List<ProjectEntry> projects,
-    String existingResumeText =
-        '', // NEW: pass raw resume PDF text for deep extraction
+    String existingResumeText = '',
   }) async {
+    // Sanitize input text — strip Wingdings/Symbol font glyphs from OCR
+    // so the model never sees (and copies) the ⊠-rendering characters.
+    final cleanExistingText = _sanitizeInputText(existingResumeText);
+    final hasExisting = cleanExistingText.trim().isNotEmpty;
+
     final expText = experiences.isEmpty
-        ? 'No experience listed — treat as fresher'
+        ? 'No additional experience provided'
         : experiences.map((e) => e.toText()).join('\n\n');
 
     final projText = projects.isEmpty
-        ? 'No projects listed'
+        ? 'No additional projects provided'
         : projects.map((p) => p.toText()).join('\n\n');
 
-    final hasExisting = existingResumeText.trim().isNotEmpty;
-    final existingBlock = hasExisting
+    // ── Baseline ATS analysis block (only if existing resume) ────────────────
+    final baselineBlock = hasExisting
         ? '''
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-CANDIDATE'S EXISTING RESUME (extract ALL real data — companies, colleges, projects, metrics, dates, skills):
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-$existingResumeText
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-INSTRUCTION: Extract every real detail from the resume above (actual company names, actual job titles, actual dates, actual universities, actual GPA/CGPA, actual project names, actual technologies). Use the form data below only for anything missing from the existing resume.
+═══════════════════════════════════════════════════════════
+EXISTING RESUME (primary source of truth — read every word):
+═══════════════════════════════════════════════════════════
+$cleanExistingText
+═══════════════════════════════════════════════════════════
+
+EXTRACTION RULES (mandatory — follow exactly):
+1. FULL NAME: The candidate's real full name is the very first heading/large text in
+   the resume above. Extract it precisely. IGNORE the form "Name" field — it may
+   contain a Firebase login alias (e.g. "vb") instead of the real name.
+2. Extract exact company names, job titles, and date ranges from WORK EXPERIENCE.
+3. Extract exact university, degree, year, and CGPA/GPA from EDUCATION.
+4. Extract every skill and technology explicitly listed.
+5. Extract exact project names, tech stacks, and any metrics already present.
+6. Extract LinkedIn, GitHub, portfolio URLs if present.
+7. Preserve ALL real metrics (e.g. "~70% reduction", "~10,000 DAU") — never
+   remove or water down existing numbers.
+8. Use form data ONLY for details genuinely absent from the existing resume.
 '''
         : '';
 
+    // ── The ATS scoring rubric (passed to the model so it grades itself) ─────
+    // Max 100 points across 6 categories.
+    // Note: \$Z is escaped so Dart does not treat it as string interpolation.
+    final scoringRubric = '''
+ATS SCORING RUBRIC — use this EXACT system to score both resumes (before and after):
+
+CATEGORY                      MAX   HOW POINTS ARE AWARDED
+─────────────────────────────────────────────────────────────────────────────
+A. Power Action Verbs          20   +3 pts per bullet starting with power verb
+                                    -2 pts per passive/weak opening ("Worked on…",
+                                    "Responsible for…", "Helped with…")
+B. Quantified Achievements     25   +5 pts per bullet with a real or estimated metric
+                                    (~X users, ~Y% improvement, \$Z revenue)
+                                    0 pts for vague outcomes ("improved performance")
+C. Role-Specific Keywords      20   +2 pts per exact keyword/skill that a recruiter
+                                    would search for this role appearing naturally
+                                    (not keyword-stuffed in a hidden block)
+D. ATS Structure & Headers     15   +3 pts each correct header:
+                                    PROFESSIONAL SUMMARY, WORK EXPERIENCE,
+                                    TECHNICAL SKILLS, PROJECTS, EDUCATION
+                                    -5 pts for tables, columns, graphics, text boxes
+E. Contact Info Completeness   10   +2 pts each: name, email, phone, location, LinkedIn/GitHub
+F. Summary Quality              10  +10 if 3-line role-specific summary with achievement exists
+                                    +5 if generic summary exists
+                                    0 if no summary
+─────────────────────────────────────────────────────────────────────────────
+TOTAL                         100
+''';
+
     final prompt =
         '''
-You are a world-class professional resume writer with 15+ years of experience helping candidates at FAANG companies and top startups. You have written resumes that achieve 90%+ ATS pass rates. Your task: produce an OUTSTANDING, interview-winning resume.
+You are a Certified Professional Resume Writer (CPRW) with 20 years of experience
+placing candidates at Google, Amazon, Flipkart, Razorpay, and top Indian startups.
+You understand exactly how ATS systems (Taleo, Workday, Greenhouse, iCIMS) parse resumes.
 
-$existingBlock
+YOUR MISSION: Generate a resume for "$fullName" targeting "$targetRole" that scores
+85+ / 100 on the rubric below. Also score the EXISTING resume (if provided) so the
+candidate sees the before-and-after improvement.
 
-CANDIDATE DETAILS (use to fill any gaps not found in existing resume):
-Name: $fullName
-Email: $email | Phone: $phone | Location: $location
-Target Role: $targetRole
-Years of Experience: $yearsExp
+$scoringRubric
 
-ADDITIONAL EXPERIENCE PROVIDED:
+$baselineBlock
+
+CANDIDATE FORM DATA (fill gaps not found in existing resume):
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Name     : $fullName
+Email    : $email
+Phone    : $phone
+Location : $location
+Target   : $targetRole
+Exp Level: $yearsExp
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+ADDITIONAL EXPERIENCE:
 $expText
 
-EDUCATION PROVIDED:
+EDUCATION:
 $education
 
-SKILLS PROVIDED: $skills
+SKILLS:
+$skills
 
 ADDITIONAL PROJECTS:
 $projText
 
-━━ STRICT WRITING RULES — EVERY RULE IS MANDATORY ━━
+════════════════════════════════════════════════════════════
+MANDATORY WRITING RULES — every rule must be followed:
+════════════════════════════════════════════════════════════
 
-PROFESSIONAL SUMMARY (3 lines):
-• Line 1: "[X] years of experience as [specific role] specializing in [key tech stack]"
-• Line 2: Mention 2 measurable achievements (use real numbers from resume, estimate with ~)
-• Line 3: "Seeking [targetRole] to [specific value you bring]"
+RULE 1 — PROFESSIONAL SUMMARY (exactly 3 lines):
+- Line 1: "[X yrs] experienced [specific role title] specializing in [2-3 core technologies from their stack]"
+- Line 2: Use ONLY achievements that appear verbatim in the resume with their real numbers.
+  If no numbers exist, write: "Delivered [specific project/feature] and [specific technical contribution]" — no invented figures.
+- Line 3: "Seeking [targetRole] at a [company type] to [specific value proposition based on their actual background]"
 
-EXPERIENCE BULLETS (MOST IMPORTANT):
-• Formula: [Strong Action Verb] + [specific what] + [technology used] + [quantified result]
-• EVERY bullet needs a metric. If not in resume, ESTIMATE with ~ (e.g., ~30% faster, ~5,000 users)
-• Power verbs: Architected, Engineered, Spearheaded, Optimized, Automated, Delivered, Reduced, Increased, Launched, Mentored
-• BAD: "Worked on backend APIs" 
-• GOOD: "Engineered 12 RESTful APIs using Node.js and PostgreSQL, reducing average response time by ~40% and supporting ~8,000 daily active users"
-• Minimum 3 bullets per job. Maximum 5 bullets per job.
+RULE 2 — EXPERIENCE BULLETS (MOST CRITICAL FOR ATS SCORE):
+Every single bullet MUST follow this formula:
+  [Power Verb] + [specific what] + [named technology] + [outcome or description — real numbers only]
 
-SKILLS SECTION:
-• Group by: Programming Languages | Frontend | Backend | Databases | Cloud/DevOps | Tools & Frameworks
-• Include ONLY skills that appear in resume OR in the provided skills list
+Power verbs to use (vary them — never repeat the same verb):
+  Architected, Engineered, Spearheaded, Automated, Optimized, Delivered, Reduced,
+  Increased, Launched, Mentored, Refactored, Integrated, Designed, Migrated, Deployed
 
-PROJECTS (make them shine):
-• Line 1: "Built [project name] — [what it does] using [tech stack]"
-• Line 2: "[Key achievement or metric] | [GitHub/deployment link if mentioned]"
+Metric rules — HONESTY IS MANDATORY:
+  - If the resume already has a real number → preserve it exactly (e.g. "~70% reduction" stays)
+  - If NO metric exists in the source data → describe the technical achievement WITHOUT any number.
+    Do NOT fabricate, guess, or estimate numbers. Do NOT use "~" to make up figures.
+    NEVER add "~6,000 users", "~120ms latency", "~92% crash-free" unless the source says so.
+  - NEVER invent companies, roles, projects, or figures not present in the data.
 
-EDUCATION:
-• Include actual CGPA/GPA if found in resume
-• Add relevant coursework if found
+BAD (fabricating numbers): "Engineered REST APIs serving ~6,000 daily requests with ~120ms latency"
+GOOD (honest, no invented metric): "Engineered RESTful APIs using Node.js and Firebase for real-time data sync"
 
-ATS OPTIMIZATION:
-• Use exact keywords recruiters search for "$targetRole"
-• Section headers must be: PROFESSIONAL SUMMARY | WORK EXPERIENCE | TECHNICAL SKILLS | PROJECTS | EDUCATION
-• No tables, no columns, no graphics in text — pure plain text for ATS
+BAD (fabricating users): "Built Flutter app supporting ~3,500 registered users"
+GOOD (honest): "Built a cross-platform Flutter application with Firebase Auth and Firestore for role-based access control"
 
-FORMAT THE RESUME EXACTLY LIKE THIS:
+If the source resume says "~70% reduction in manual effort" → keep it exactly.
+If the source resume says nothing about scale → describe WHAT was built and HOW, not made-up numbers.
+
+RULE 3 — SKILLS SECTION:
+Group by these exact labels (include only skills actually in their data):
+  Programming Languages | Frontend Technologies | Backend Technologies |
+  Databases & Storage | Cloud & DevOps | Mobile Development | Tools & Frameworks
+
+RULE 4 — PROJECTS (make them stand out):
+  Line 1: "[Project Name] | [Tech Stack] | [Live/GitHub link if found in existing resume]"
+  - "Built [what it does + problem it solves] using [specific tech]"
+  - "[Technical achievement or real metric if present in resume] — [how it was implemented]"
+
+RULE 5 — CONTACT HEADER:
+  $fullName
+  $email | $phone | $location | [LinkedIn URL from resume if found] | [GitHub URL if found]
+
+RULE 6 — ATS FORMATTING (critical):
+  • Pure plain text — NO tables, NO columns, NO text boxes, NO graphics
+  • Section headers in ALL CAPS exactly as listed in rubric
+  • Dates right-aligned is standard but in plain text just put "Month Year – Month Year"
+  - Use "- " (plain ASCII hyphen-space) for every bullet point — no Unicode bullets, no asterisks
+
+═══════════════════════════════════════
+SECTION ORDER (mandatory):
+═══════════════════════════════════════
 [FULL NAME]
-[email] | [phone] | [location] | [LinkedIn if found]
+[email] | [phone] | [location] | [LinkedIn if found] | [GitHub if found]
 
 PROFESSIONAL SUMMARY
-[3-line summary]
+[3-line summary per Rule 1]
 
 WORK EXPERIENCE
-[Company Name] | [Job Title] | [Start Date – End Date]
-• [bullet]
-• [bullet]
-• [bullet]
+[Company] | [Title] | [Start – End]
+- [bullet per Rule 2]
+- [bullet per Rule 2]
+- [bullet per Rule 2]
+(3-5 bullets per role — never fewer than 3)
 
 TECHNICAL SKILLS
-Programming Languages: [skills]
-Frontend: [skills]
-...
+Programming Languages: ...
+[other categories per Rule 3]
 
 PROJECTS
-[Project Name] | [Tech Stack]
-• [impact line]
-• [metric line]
+[Project Name] | [Stack] | [Link if found]
+- [impact bullet — from real data only]
+- [technical achievement — no invented numbers]
 
 EDUCATION
-[Degree] | [University] | [Year] | CGPA: [x.x]
+[Degree] | [University] | [Year] | CGPA: [x.x if found]
+Relevant Coursework: [if found]
 
-ALSO GENERATE:
-- atsScore: Be honest and precise (0-100). Score based on: action verbs (20pts), quantified metrics (25pts), relevant keywords for "$targetRole" (25pts), proper ATS section headers (15pts), contact info completeness (15pts)
-- keyStrengths: 4-5 specific, real strengths extracted from the resume (not generic)
-- suggestedRoles: 4 specific job titles this person should apply for based on their ACTUAL background
-- topKeywords: 12 ATS keywords recruiters use when hiring "$targetRole" — include both technical and soft skills
-- linkedinSummary: Compelling 180-word LinkedIn "About" section in first person. Start with a hook, mention 2-3 achievements, end with what you're looking for.
-- improvementTips: 3 specific, actionable tips to make this resume even better
+CERTIFICATIONS (include only if found in resume data)
+[Certification Name] | [Issuer] | [Year]
 
-Return ONLY valid JSON (no markdown, no explanation):
+═══════════════════════════════════════
+AFTER WRITING THE RESUME, ALSO GENERATE:
+═══════════════════════════════════════
+
+sectionScores: Score each ATS category using the exact rubric:
+  Category names must be: "Power Action Verbs", "Quantified Achievements",
+  "Role Keywords", "ATS Structure", "Contact Info", "Summary Quality"
+  maxScore values: 20, 25, 20, 15, 10, 10 respectively.
+  verdict: "Excellent" (>=90%), "Strong" (>=70%), "Average" (>=50%), "Weak" (<50%)
+  tip: one specific fix for this category if not at max
+
+missingItems: List specific things missing from this resume that would boost the ATS score.
+  Be SPECIFIC — reference actual content from their resume.
+  pointsToGain: realistic points from adding this item (1-10)
+  priority: "critical" (adds 7+pts), "high" (adds 4-6pts), "medium" (adds 1-3pts)
+
+keyStrengths: 4-5 specific strengths extracted from their ACTUAL background
+  (not generic — reference real technologies/achievements from their resume)
+
+suggestedRoles: 4 specific job titles for THEIR background
+  (e.g. not just "Developer" but "React Native Mobile Developer" or "Node.js Backend Engineer")
+
+topKeywords: Exactly 12 ATS keywords recruiters use when hiring "$targetRole"
+  Mix: 8 technical (exact tool/framework names) + 4 soft/process keywords
+
+linkedinSummary: 180-word LinkedIn "About" section in first person.
+  Start with a compelling hook (not "I am a developer").
+  Mention 2-3 real achievements from their resume.
+  End with what opportunities you are seeking.
+
+improvementTips: Exactly 3 highly specific tips to push this resume from current score to 90+.
+  Each tip must reference something specific in THEIR resume — not generic advice.
+
+atsScoreBefore: Apply the EXACT rubric above to the ORIGINAL uploaded resume.
+  Count every signal honestly — power verbs, quantified bullets, section headers, contact completeness.
+  Report the real score. Do NOT round up or inflate. If no existing resume uploaded, set to 0.
+
+atsScoreAfter: Apply the EXACT same rubric to the newly generated resume.
+  Count every signal honestly the same way. Do NOT inflate to make the improvement look bigger.
+  A typical freshly generated resume scores 60-80; scoring 85+ requires LinkedIn, GitHub, 3+ metrics.
+  Report the real score. The candidate needs the truth, not flattery.
+
+════════════════════════════════
+Return ONLY valid JSON — no markdown, no explanation, no preamble:
+════════════════════════════════
 {
-  "resumeText": "<complete formatted resume — all sections — plain text with real newlines as \\n>",
-  "summary": "<the 3-line professional summary only>",
-  "atsScore": <integer 0-100>,
-  "keyStrengths": ["<specific strength 1>", "<specific strength 2>", "<specific strength 3>", "<specific strength 4>"],
-  "suggestedRoles": ["<specific role>", "<specific role>", "<specific role>", "<specific role>"],
-  "topKeywords": ["<kw1>", "<kw2>", "<kw3>", "<kw4>", "<kw5>", "<kw6>", "<kw7>", "<kw8>", "<kw9>", "<kw10>", "<kw11>", "<kw12>"],
-  "linkedinSummary": "<180-word first-person LinkedIn About section>",
-  "improvementTips": ["<tip 1>", "<tip 2>", "<tip 3>"]
+  "resumeText": "<complete resume — all sections — use real \\n for newlines>",
+  "summary": "<the 3-line PROFESSIONAL SUMMARY from the resume>",
+  "atsScoreBefore": <integer 0-100, 0 if no existing resume>,
+  "atsScoreAfter": <integer 0-100>,
+  "sectionScores": [
+    {
+      "category": "Power Action Verbs",
+      "score": <0-20>,
+      "maxScore": 20,
+      "verdict": "Excellent|Strong|Average|Weak",
+      "tip": "<specific one-line fix>"
+    },
+    {
+      "category": "Quantified Achievements",
+      "score": <0-25>,
+      "maxScore": 25,
+      "verdict": "...",
+      "tip": "..."
+    },
+    {
+      "category": "Role Keywords",
+      "score": <0-20>,
+      "maxScore": 20,
+      "verdict": "...",
+      "tip": "..."
+    },
+    {
+      "category": "ATS Structure",
+      "score": <0-15>,
+      "maxScore": 15,
+      "verdict": "...",
+      "tip": "..."
+    },
+    {
+      "category": "Contact Info",
+      "score": <0-10>,
+      "maxScore": 10,
+      "verdict": "...",
+      "tip": "..."
+    },
+    {
+      "category": "Summary Quality",
+      "score": <0-10>,
+      "maxScore": 10,
+      "verdict": "...",
+      "tip": "..."
+    }
+  ],
+  "missingItems": [
+    {
+      "item": "<specific missing element>",
+      "pointsToGain": <integer 1-10>,
+      "howToAdd": "<exact instruction for THIS person>",
+      "priority": "critical|high|medium",
+      "section": "<which section to add it>"
+    }
+  ],
+  "keyStrengths": ["<specific strength 1>", "<strength 2>", "<strength 3>", "<strength 4>"],
+  "suggestedRoles": ["<specific role 1>", "<role 2>", "<role 3>", "<role 4>"],
+  "topKeywords": ["<kw1>","<kw2>","<kw3>","<kw4>","<kw5>","<kw6>","<kw7>","<kw8>","<kw9>","<kw10>","<kw11>","<kw12>"],
+  "linkedinSummary": "<180-word first-person LinkedIn About>",
+  "improvementTips": ["<specific tip 1>", "<specific tip 2>", "<specific tip 3>"]
 }
 ''';
 
-    final raw = await _call(prompt, maxTokens: 4096);
+    final raw = await _call(prompt, maxTokens: 3000, model: _fastModel);
     final data = _decode(raw);
-    return GeneratedResume.fromMap(data);
+
+    // ── Post-process resumeText: normalise all bullet variants ───────────────
+    // The model sometimes outputs ◆ ▪ ● ▶ or other Unicode bullets that
+    // certain device fonts cannot render, showing as ⊠ replacement boxes.
+    // We normalise everything to the standard '• ' bullet character.
+    if (data['resumeText'] is String) {
+      data['resumeText'] = _normalizeBullets(data['resumeText'] as String);
+    }
+
+    return GeneratedResume.fromMap(data, hadExisting: hasExisting);
   }
 
+  // ── Bullet normalisation ─────────────────────────────────────────────────
+  /// Replaces every bullet-like character with a plain ASCII "- " hyphen.
+  ///
+  /// Why two passes:
+  ///   Pass 1 — Named list: catches common Unicode bullets the AI explicitly uses.
+  ///   Pass 2 — Regex catch-all: catches ANY symbol/private-use character
+  ///            (e.g. \uF0B7 from Wingdings PDFs, \u22A0 ⊠, etc.) that sits
+  ///            at the start of a line followed by whitespace. These are the
+  ///            characters that render as ⊠ replacement boxes on Android/iOS
+  ///            and that no explicit list can exhaustively cover.
+  String _normalizeBullets(String text) {
+    // Pass 1 — named Unicode bullets
+    const named = [
+      '\u2022', // •
+      '\u00B7', // ·
+      '\u2023', // ‣
+      '\u25C6', // ◆
+      '\u25C7', // ◇
+      '\u25AA', // ▪
+      '\u25B8', // ▸
+      '\u25B6', // ▶
+      '\u25CF', // ●
+      '\u25CB', // ○
+      '\u25A0', // ■
+      '\u25A1', // □
+      '\u27A4', // ➤
+      '\u27A2', // ➢
+      '\u2726', // ✦
+      '\u2727', // ✧
+      '\u2714', // ✔
+      '\u2713', // ✓
+      '\u2605', // ★
+      '\u2606', // ☆
+      '\u22A0', // ⊠  ← the exact character shown in the screenshot
+      '\uF0B7', // private-use Wingdings bullet from symbol-font PDFs
+      '\uF0A7', // private-use Wingdings hollow bullet
+    ];
+    String result = text;
+    for (final b in named) {
+      result = result.replaceAll(b, '-');
+    }
+
+    // Pass 2 — catch-all regex: any character that is NOT a standard ASCII
+    // printable character (U+0020–U+007E) or common accented Latin (U+00C0–U+024F)
+    // appearing at the very start of a line followed by a space or tab.
+    // This captures every symbol/private-use/math/box-drawing bullet the AI
+    // may copy from the source PDF, regardless of exact code point.
+    result = result.replaceAllMapped(
+      RegExp(r'^([^\u0020-\u007E\u00C0-\u024F\r\n])(?=[ \t])', multiLine: true),
+      (_) => '-',
+    );
+
+    // Asterisk bullets
+    result = result.replaceAll(RegExp(r'^\* ', multiLine: true), '- ');
+    // Collapse double-dashes left by replacements above
+    result = result.replaceAll(RegExp(r'^--+ ', multiLine: true), '- ');
+    return result;
+  }
+
+  /// Sanitises [text] coming from OCR/PDF before embedding in an AI prompt.
+  /// Strips or replaces private-use-area and symbol characters that OCR
+  /// extracts from Wingdings/Symbol fonts — these cause the model to copy the
+  /// weird glyphs into its output (shown as ⊠ in Flutter).
+  String _sanitizeInputText(String text) => _normalizeBullets(text);
   // ── Internal helpers ───────────────────────────────────────────────────────
-  // Posts to backend /api/ai/chat — backend calls Groq with server-side key.
-  // GROQ_API_KEY never sent to browser.
-  Future<String> _call(String prompt, {required int maxTokens}) async {
+  Future<String> _call(
+    String prompt, {
+    required int maxTokens,
+    String? model,
+  }) async {
     final backendUrl = AppConfig.backendUrl;
     if (backendUrl.isEmpty) {
       throw Exception(
@@ -714,11 +1009,15 @@ Return ONLY valid JSON (no markdown, no explanation):
           headers: {'Content-Type': 'application/json'},
           body: jsonEncode({
             'prompt': prompt,
-            'model': _model,
+            'model': model ?? _model,
             'maxTokens': maxTokens,
           }),
         )
-        .timeout(const Duration(seconds: 95));
+        .timeout(
+          const Duration(seconds: 90),
+          onTimeout: () =>
+              throw Exception('Request timed out. Please try again.'),
+        );
 
     if (response.statusCode != 200) {
       final body = jsonDecode(response.body) as Map<String, dynamic>;
@@ -735,26 +1034,20 @@ Return ONLY valid JSON (no markdown, no explanation):
   }
 
   Map<String, dynamic> _decode(String raw) {
-    // Step 1: strip markdown fences
     String clean = raw
         .replaceAll('```json', '')
         .replaceAll('```dart', '')
         .replaceAll('```', '')
         .trim();
 
-    // Step 2: extract JSON object
     final start = clean.indexOf('{');
     final end = clean.lastIndexOf('}');
     if (start != -1 && end != -1 && end > start) {
       clean = clean.substring(start, end + 1);
     }
 
-    // Step 3: fix bad control characters inside JSON string values
-    // AI sometimes puts raw newlines/tabs inside strings instead of \n / \t
-    // We sanitize only the characters INSIDE string values
     clean = _sanitizeJsonControlChars(clean);
 
-    // Step 4: try parse, then retry with trailing-comma fix
     try {
       return jsonDecode(clean) as Map<String, dynamic>;
     } catch (_) {
@@ -769,7 +1062,6 @@ Return ONLY valid JSON (no markdown, no explanation):
     }
   }
 
-  /// Replaces raw control characters inside JSON string values with safe escapes.
   String _sanitizeJsonControlChars(String json) {
     final buf = StringBuffer();
     bool inString = false;
@@ -784,41 +1076,33 @@ Return ONLY valid JSON (no markdown, no explanation):
         escaped = false;
         continue;
       }
-
       if (ch == '\\') {
         escaped = true;
         buf.write(ch);
         continue;
       }
-
       if (ch == '"') {
         inString = !inString;
         buf.write(ch);
         continue;
       }
-
-      // Inside a string literal: escape raw control characters
       if (inString) {
         if (code == 0x0A) {
           buf.write('\\n');
           continue;
-        } // LF  → \n
+        }
         if (code == 0x0D) {
           buf.write('\\r');
           continue;
-        } // CR  → \r
+        }
         if (code == 0x09) {
           buf.write('\\t');
           continue;
-        } // TAB → \t
-        if (code < 0x20) {
-          continue;
-        } // other control → drop
+        }
+        if (code < 0x20) continue;
       }
-
       buf.write(ch);
     }
-
     return buf.toString();
   }
 }

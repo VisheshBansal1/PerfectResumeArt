@@ -492,41 +492,119 @@ class _ResumeLoadedCard extends ConsumerWidget {
           // Divider
           Divider(height: 1, color: AppTheme.success.withOpacity(0.2)),
 
-          // Change resume button — full width, clearly tappable
-          InkWell(
-            onTap: () => _pickAndReplaceResume(context, ref),
-            borderRadius: const BorderRadius.only(
-              bottomLeft: Radius.circular(14),
-              bottomRight: Radius.circular(14),
-            ),
-            child: Padding(
-              padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 14),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Icon(
-                    Icons.upload_file_rounded,
-                    size: 16,
-                    color: AppTheme.success.withOpacity(0.85),
+          // Action row: Change + Remove
+          Row(
+            children: [
+              // Change resume
+              Expanded(
+                child: InkWell(
+                  onTap: () => _pickAndReplaceResume(context, ref),
+                  borderRadius: const BorderRadius.only(
+                    bottomLeft: Radius.circular(14),
                   ),
-                  const SizedBox(width: 6),
-                  Text(
-                    'Change Resume / Upload New',
-                    style: TextStyle(
-                      fontSize: 13,
-                      fontWeight: FontWeight.w700,
-                      color: AppTheme.success.withOpacity(0.9),
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(
+                      vertical: 11,
+                      horizontal: 14,
+                    ),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(
+                          Icons.upload_file_rounded,
+                          size: 15,
+                          color: AppTheme.success.withOpacity(0.85),
+                        ),
+                        const SizedBox(width: 5),
+                        Text(
+                          'Change Resume',
+                          style: TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w700,
+                            color: AppTheme.success.withOpacity(0.9),
+                          ),
+                        ),
+                      ],
                     ),
                   ),
-                  const SizedBox(width: 4),
-                  Icon(
-                    Icons.chevron_right,
-                    size: 16,
-                    color: AppTheme.success.withOpacity(0.6),
-                  ),
-                ],
+                ),
               ),
-            ),
+
+              // Vertical divider
+              Container(
+                width: 1,
+                height: 38,
+                color: AppTheme.success.withOpacity(0.2),
+              ),
+
+              // Remove resume — clears context
+              Expanded(
+                child: InkWell(
+                  onTap: () => _confirmRemove(context, ref),
+                  borderRadius: const BorderRadius.only(
+                    bottomRight: Radius.circular(14),
+                  ),
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(
+                      vertical: 11,
+                      horizontal: 14,
+                    ),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(
+                          Icons.delete_outline,
+                          size: 15,
+                          color: AppTheme.error.withOpacity(0.75),
+                        ),
+                        const SizedBox(width: 5),
+                        Text(
+                          'Remove Resume',
+                          style: TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w700,
+                            color: AppTheme.error.withOpacity(0.85),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  // Confirm before removing so user doesn't accidentally clear their resume
+  void _confirmRemove(BuildContext context, WidgetRef ref) {
+    showDialog(
+      context: context,
+      builder: (_) => AlertDialog(
+        title: const Text('Remove Resume?'),
+        content: const Text(
+          'This will clear your uploaded resume from all tools. '
+          'You can re-upload anytime.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () {
+              Navigator.pop(context);
+              ref.read(resumeContextProvider.notifier).clear();
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(
+                  content: Text('Resume removed'),
+                  duration: Duration(seconds: 2),
+                ),
+              );
+            },
+            child: Text('Remove', style: TextStyle(color: AppTheme.error)),
           ),
         ],
       ),
