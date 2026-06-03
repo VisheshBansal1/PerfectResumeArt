@@ -31,8 +31,6 @@ class FixResumeScreen extends ConsumerStatefulWidget {
 class _FixResumeScreenState extends ConsumerState<FixResumeScreen>
     with SingleTickerProviderStateMixin {
   late TabController _tab;
-  bool _unlocked = false;
-
   String get _effectiveResumeText {
     if (widget.resumeText.trim().length > 50) return widget.resumeText;
     // Fall back to global context if no text passed directly
@@ -43,13 +41,6 @@ class _FixResumeScreenState extends ConsumerState<FixResumeScreen>
   void initState() {
     super.initState();
     _tab = TabController(length: 2, vsync: this);
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      final unlocks = ref.read(unlockProvider);
-      if (unlocks.contains('fix_resume')) {
-        setState(() => _unlocked = true);
-        _startFix();
-      }
-    });
   }
 
   @override
@@ -73,7 +64,6 @@ class _FixResumeScreenState extends ConsumerState<FixResumeScreen>
     );
     if (paid && mounted) {
       await ref.read(unlockProvider.notifier).unlock('fix_resume');
-      setState(() => _unlocked = true);
       _startFix();
     }
   }
@@ -81,17 +71,29 @@ class _FixResumeScreenState extends ConsumerState<FixResumeScreen>
   @override
   Widget build(BuildContext context) {
     final state = ref.watch(fixResumeProvider);
+    // Watch unlockProvider reactively — updates instantly when Firestore loads
+    // or when user purchases. No local bool needed.
+    final unlocked = ref.watch(unlockProvider).contains('fix_resume');
+
+    // Auto-start fix as soon as unlock is confirmed (covers returning users)
+    if (unlocked &&
+        state.result == null &&
+        !state.isLoading &&
+        state.error == null) {
+      WidgetsBinding.instance.addPostFrameCallback((_) => _startFix());
+    }
+
     return Scaffold(
       appBar: AppBar(
         title: const Text('Fix My Resume'),
         actions: [
-          if (_unlocked && state.result != null)
+          if (unlocked && state.result != null)
             _PdfDownloadButton(
               resumeText: state.result!.improvedText,
               name: widget.userName,
             ),
         ],
-        bottom: _unlocked && state.result != null
+        bottom: unlocked && state.result != null
             ? TabBar(
                 controller: _tab,
                 indicatorWeight: 3,
@@ -110,7 +112,7 @@ class _FixResumeScreenState extends ConsumerState<FixResumeScreen>
               )
             : null,
       ),
-      body: _unlocked ? _unlockedBody(state) : _lockedBody(),
+      body: unlocked ? _unlockedBody(state) : _lockedBody(),
     );
   }
 

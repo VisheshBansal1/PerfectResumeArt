@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../core/utils/error_utils.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -20,38 +22,59 @@ final resumePdfServiceProvider = Provider<ResumePdfService>(
 
 // ─── Unlock Status Provider ───────────────────────────────────────────────────
 // Persists unlocks to Firestore so they survive app restarts.
+//
+// BUG FIX: The original UnlockNotifier called _load() in its constructor, but
+// on web (especially after auth-persistence fix) the Firebase user is not ready
+// yet at that moment — _uid returns null and the load is silently skipped.
+// Fix: listen to Firebase auth state changes and reload whenever a user signs in.
 
 class UnlockNotifier extends StateNotifier<Set<String>> {
   UnlockNotifier() : super({}) {
-    _load();
+    // Listen to auth state — reload purchases each time a user signs in.
+    // This covers: app cold-start, page refresh (web), and account switching.
+    _authSub = FirebaseAuth.instance.authStateChanges().listen((user) {
+      if (user != null) {
+        _load(user.uid);
+      } else {
+        // User signed out — clear in-memory unlocks immediately.
+        state = {};
+      }
+    });
   }
 
   final _db = FirebaseFirestore.instance;
+  late final StreamSubscription<User?> _authSub;
 
-  String? get _uid => FirebaseAuth.instance.currentUser?.uid;
+  @override
+  void dispose() {
+    _authSub.cancel();
+    super.dispose();
+  }
 
-  Future<void> _load() async {
-    final uid = _uid;
-    if (uid == null) return;
+  Future<void> _load(String uid) async {
     try {
       final doc = await _db.collection('unlocks').doc(uid).get();
       if (doc.exists) {
         final data = doc.data()!;
         final plans = (data['plans'] as List? ?? []).cast<String>().toSet();
         state = plans;
+      } else {
+        state = {}; // New user — no purchases yet
       }
     } catch (_) {}
   }
 
   Future<void> unlock(String planKey) async {
+    // Update in-memory state immediately so the UI reflects the purchase at once
     state = {...state, planKey};
-    final uid = _uid;
+    final uid = FirebaseAuth.instance.currentUser?.uid;
     if (uid == null) return;
     try {
+      // Use FieldValue.arrayUnion so concurrent calls don't overwrite each other
       await _db.collection('unlocks').doc(uid).set({
-        'plans': state.toList(),
+        'plans': FieldValue.arrayUnion([planKey]),
         'updatedAt': FieldValue.serverTimestamp(),
-      });
+      }, SetOptions(merge: true)); // merge:true never wipes existing plans
     } catch (_) {}
   }
 

@@ -1,3 +1,10 @@
+// lib/features/auth/screens/login_screen.dart
+//
+// CHANGES vs original (search for "// ← NEW" to find every change):
+//   1. Added import for GuestPreviewScreen
+//   2. Added _buildGuestLink() method
+//   3. Called _buildGuestLink() in the Column, below _buildRegisterLink()
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -5,6 +12,7 @@ import 'package:next_hire/features/auth/widgets/auth_widget.dart';
 
 import '../../../core/constants/app_theme.dart';
 import '../../../core/router/app_router.dart';
+import '../../../features/resume/screens/guest_preview_screen.dart'; // ← NEW
 import '../providers/auth_provider.dart';
 
 class LoginScreen extends ConsumerStatefulWidget {
@@ -102,6 +110,11 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
 
               const SizedBox(height: 24),
               _buildRegisterLink(),
+
+              // ← NEW: Guest preview entry point
+              const SizedBox(height: 16),
+              _buildGuestLink(),
+
               const SizedBox(height: 40),
             ],
           ),
@@ -220,6 +233,57 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
             color: AppTheme.primary,
             fontWeight: FontWeight.w600,
             fontSize: 14,
+          ),
+        ),
+      ),
+    ],
+  );
+
+  // ← NEW: Opens GuestPreviewScreen as a full-screen modal slide-up
+  Widget _buildGuestLink() => Column(
+    children: [
+      // Divider with label
+      Row(
+        children: [
+          Expanded(child: Divider(color: Colors.grey[300])),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 12),
+            child: Text(
+              'not ready to sign up?',
+              style: TextStyle(color: Colors.grey[400], fontSize: 11),
+            ),
+          ),
+          Expanded(child: Divider(color: Colors.grey[300])),
+        ],
+      ),
+      const SizedBox(height: 12),
+
+      // Guest button — full width, outlined, subtle
+      SizedBox(
+        width: double.infinity,
+        child: OutlinedButton.icon(
+          onPressed: () {
+            Navigator.of(context).push(
+              MaterialPageRoute(
+                builder: (_) => const GuestPreviewScreen(),
+                // slide up from bottom like a sheet
+                fullscreenDialog: true,
+              ),
+            );
+          },
+          icon: const Text('⚡', style: TextStyle(fontSize: 15)),
+          label: const Text('Try Without Signup — Free ATS Preview'),
+          style: OutlinedButton.styleFrom(
+            foregroundColor: AppTheme.textSecondary,
+            side: BorderSide(color: AppTheme.borderLight),
+            padding: const EdgeInsets.symmetric(vertical: 13),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(12),
+            ),
+            textStyle: const TextStyle(
+              fontSize: 13,
+              fontWeight: FontWeight.w500,
+            ),
           ),
         ),
       ),

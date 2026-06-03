@@ -29,7 +29,6 @@ class ResumeGeneratorScreen extends ConsumerStatefulWidget {
 
 class _ResumeGeneratorScreenState extends ConsumerState<ResumeGeneratorScreen> {
   int _step = 0;
-  bool _unlocked = false;
 
   // ── Form Controllers ──────────────────────────────────────────────────────
   final _nameCtrl = TextEditingController();
@@ -53,10 +52,7 @@ class _ResumeGeneratorScreenState extends ConsumerState<ResumeGeneratorScreen> {
     _nameCtrl.text = widget.userName;
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      final unlocks = ref.read(unlockProvider);
-      if (unlocks.contains('resume_generator') || unlocks.contains('bundle')) {
-        setState(() => _unlocked = true);
-      }
+      // No unlock check here — build() watches unlockProvider reactively
       final ctx = ref.read(resumeContextProvider);
       if (ctx.hasResume) {
         _prefillFromResume(ctx.text, ctx.detectedRole);
@@ -369,7 +365,6 @@ class _ResumeGeneratorScreenState extends ConsumerState<ResumeGeneratorScreen> {
     );
     if (paid && mounted) {
       await ref.read(unlockProvider.notifier).unlock('resume_generator');
-      setState(() => _unlocked = true);
       if (_step == _fastTrackStep && _roleCtrl.text.trim().isNotEmpty) {
         _generate();
       }
@@ -380,25 +375,31 @@ class _ResumeGeneratorScreenState extends ConsumerState<ResumeGeneratorScreen> {
   Widget build(BuildContext context) {
     final genState = ref.watch(resumeGeneratorProvider);
     final isDark = Theme.of(context).brightness == Brightness.dark;
+    // Watch reactively — unlocked becomes true the moment Firestore loads or
+    // user purchases, without needing a local bool that races async Firestore.
+    final _unlockSet = ref.watch(unlockProvider);
+    final unlocked =
+        _unlockSet.contains('resume_generator') ||
+        _unlockSet.contains('bundle');
 
     return Scaffold(
       backgroundColor: isDark ? AppTheme.surfaceDark : AppTheme.surfaceLight,
       appBar: AppBar(
         title: const Text('AI Resume Builder'),
         actions: [
-          if (_unlocked && genState.result != null)
+          if (unlocked && genState.result != null)
             _DownloadButton(name: _nameCtrl.text),
         ],
       ),
       body: AnimatedSwitcher(
         duration: const Duration(milliseconds: 300),
-        child: _body(genState, isDark),
+        child: _body(genState, isDark, unlocked),
       ),
     );
   }
 
-  Widget _body(ResumeGeneratorState state, bool isDark) {
-    if (_step == _fastTrackStep) return _fastTrackView(state, isDark);
+  Widget _body(ResumeGeneratorState state, bool isDark, bool unlocked) {
+    if (_step == _fastTrackStep) return _fastTrackView(state, isDark, unlocked);
 
     if (_step == 3) {
       if (state.isLoading) return _LoadingView();
@@ -407,7 +408,7 @@ class _ResumeGeneratorScreenState extends ConsumerState<ResumeGeneratorScreen> {
       if (state.result != null) {
         return _PreviewView(
           result: state.result!,
-          unlocked: _unlocked,
+          unlocked: unlocked,
           onUnlock: _handleUnlock,
           userName: _nameCtrl.text,
         );
@@ -442,14 +443,18 @@ class _ResumeGeneratorScreenState extends ConsumerState<ResumeGeneratorScreen> {
     );
   }
 
-  Widget _fastTrackView(ResumeGeneratorState state, bool isDark) {
+  Widget _fastTrackView(
+    ResumeGeneratorState state,
+    bool isDark,
+    bool unlocked,
+  ) {
     if (state.isLoading) return _LoadingView();
     if (state.error != null)
       return _ErrorView(error: state.error!, onRetry: _generate);
     if (state.result != null) {
       return _PreviewView(
         result: state.result!,
-        unlocked: _unlocked,
+        unlocked: unlocked,
         onUnlock: _handleUnlock,
         userName: _nameCtrl.text,
       );
@@ -604,14 +609,14 @@ class _ResumeGeneratorScreenState extends ConsumerState<ResumeGeneratorScreen> {
               onPressed: _roleCtrl.text.trim().isEmpty
                   ? null
                   : () {
-                      if (_unlocked)
+                      if (unlocked)
                         _generate();
                       else
                         _handleUnlock();
                     },
               icon: const Icon(Icons.auto_awesome, size: 20),
               label: Text(
-                _unlocked
+                unlocked
                     ? 'Generate My Resume  →'
                     : 'Unlock & Generate  ·  ₹49',
                 style: const TextStyle(

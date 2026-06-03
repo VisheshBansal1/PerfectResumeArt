@@ -29,17 +29,12 @@ class JdOptimizeScreen extends ConsumerStatefulWidget {
 class _JdOptimizeScreenState extends ConsumerState<JdOptimizeScreen>
     with SingleTickerProviderStateMixin {
   late TabController _tab;
-  bool _unlocked = false;
   final _jdController = TextEditingController();
 
   @override
   void initState() {
     super.initState();
     _tab = TabController(length: 3, vsync: this);
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      final unlocks = ref.read(unlockProvider);
-      if (unlocks.contains('jd_optimize')) setState(() => _unlocked = true);
-    });
   }
 
   @override
@@ -83,7 +78,6 @@ class _JdOptimizeScreenState extends ConsumerState<JdOptimizeScreen>
     );
     if (paid && mounted) {
       await ref.read(unlockProvider.notifier).unlock('jd_optimize');
-      setState(() => _unlocked = true);
       _startOptimize();
     }
   }
@@ -91,18 +85,19 @@ class _JdOptimizeScreenState extends ConsumerState<JdOptimizeScreen>
   @override
   Widget build(BuildContext context) {
     final state = ref.watch(jdOptimizeProvider);
+    final unlocked = ref.watch(unlockProvider).contains('jd_optimize');
 
     return Scaffold(
       appBar: AppBar(
         title: const Text('JD Optimization'),
         actions: [
-          if (_unlocked && state.result != null)
+          if (unlocked && state.result != null)
             _JdPdfButton(
               resumeText: state.result!.optimizedText,
               name: widget.userName,
             ),
         ],
-        bottom: _unlocked && state.result != null
+        bottom: unlocked && state.result != null
             ? TabBar(
                 controller: _tab,
                 isScrollable: true,
@@ -118,7 +113,7 @@ class _JdOptimizeScreenState extends ConsumerState<JdOptimizeScreen>
               )
             : null,
       ),
-      body: _unlocked && state.result != null
+      body: unlocked && state.result != null
           ? _resultBody(state)
           : _inputBody(state),
     );

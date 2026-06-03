@@ -213,7 +213,12 @@ class ResumeUploadState {
 const _kKeepValue = Object();
 
 final resumeUploadProvider =
-    StateNotifierProvider<ResumeUploadNotifier, ResumeUploadState>((ref) {
+    StateNotifierProvider.autoDispose<ResumeUploadNotifier, ResumeUploadState>((
+      ref,
+    ) {
+      // FIX 2: autoDispose ensures this notifier's state is reset when the
+      // screen is not active — prevents stale upload/analysis data persisting
+      // across logout + re-login with a different account.
       return ResumeUploadNotifier(
         ref.read(firebaseServiceProvider),
         ref.read(ocrServiceProvider),
@@ -563,7 +568,9 @@ final resumeByIdProvider = FutureProvider.family<ResumeModel?, String>((
   id,
 ) async {
   if (id.isEmpty) return null;
-  final uid = FirebaseAuth.instance.currentUser?.uid;
+  // FIX 2: Watch authStateProvider so this provider re-runs when user changes.
+  final authUser = ref.watch(authStateProvider).value;
+  final uid = authUser?.uid;
   if (uid == null) return null;
   final service = ref.read(firebaseServiceProvider);
   final resumes = await service.getUserResumes(uid);
@@ -575,7 +582,9 @@ final resumeByIdProvider = FutureProvider.family<ResumeModel?, String>((
 });
 
 final userAnalysesProvider = FutureProvider<List<AnalysisModel>>((ref) async {
-  final uid = FirebaseAuth.instance.currentUser?.uid;
+  // FIX 2: Watch authStateProvider so this provider re-runs when user changes.
+  final authUser = ref.watch(authStateProvider).value;
+  final uid = authUser?.uid;
   if (uid == null) return [];
   final service = ref.read(firebaseServiceProvider);
   return service.getUserAnalyses(uid);

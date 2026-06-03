@@ -71,11 +71,13 @@ class AuthState {
 final authNotifierProvider = StateNotifierProvider<AuthNotifier, AuthState>((
   ref,
 ) {
-  return AuthNotifier(ref.read(firebaseServiceProvider));
+  return AuthNotifier(ref.read(firebaseServiceProvider), ref);
 });
 
 class AuthNotifier extends StateNotifier<AuthState> {
-  AuthNotifier(this._service) : super(const AuthState());
+  AuthNotifier(this._service, this._ref) : super(const AuthState());
+
+  final Ref _ref;
 
   final FirebaseService _service;
   final _auth = FirebaseAuth.instance;
@@ -185,6 +187,14 @@ class AuthNotifier extends StateNotifier<AuthState> {
   // ── Logout ────────────────────────────────────────────────────────────────
   Future<void> logout() async {
     await Future.wait([_auth.signOut(), _googleSignIn.signOut()]);
+
+    // FIX 2: Invalidate currentUserProvider so that when another account logs in,
+    // providers that watch(currentUserProvider) or watch(authStateProvider) will
+    // automatically re-run and fetch fresh data for the new user.
+    // The authStateProvider (a StreamProvider on Firebase) emits the new user
+    // automatically; this ensures the cached FutureProvider is also cleared.
+    _ref.invalidate(currentUserProvider);
+
     state = const AuthState();
   }
 
