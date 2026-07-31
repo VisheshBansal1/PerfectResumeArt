@@ -657,20 +657,21 @@ class AiService {
         docType: docType,
       );
     }
-    final response = await _callGroqWithRetry(
-      _buildFullAnalysisPrompt(
+    return _callAndParseWithRetry(
+      prompt: _buildFullAnalysisPrompt(
         _safeResumeText(_sanitizeOcrBullets(resumeText)),
         job,
       ),
       model: _primaryModel,
-      maxTokens: 4096,
-    );
-    return _parseAnalysisResponse(
-      response,
-      userId,
-      resumeId,
-      job,
-      analysisType,
+      maxTokens: 6144,
+      temperature: 0.3,
+      parse: (response) => _parseAnalysisResponse(
+        response,
+        userId,
+        resumeId,
+        job,
+        analysisType,
+      ),
     );
   }
 
@@ -709,22 +710,23 @@ class AiService {
       );
     }
 
-    final response = await _callGroqWithRetry(
-      _buildCustomTechPrompt(
+    return _callAndParseWithRetry(
+      prompt: _buildCustomTechPrompt(
         _safeResumeText(_sanitizeOcrBullets(resumeText)),
         jobTitle,
         requiredSkills,
         description,
       ),
       model: _primaryModel,
-      maxTokens: 4096,
-    );
-    return _parseAnalysisResponse(
-      response,
-      userId,
-      resumeId,
-      virtualJob,
-      'custom_tech',
+      maxTokens: 6144,
+      temperature: 0.3,
+      parse: (response) => _parseAnalysisResponse(
+        response,
+        userId,
+        resumeId,
+        virtualJob,
+        'custom_tech',
+      ),
     );
   }
 
@@ -746,12 +748,13 @@ class AiService {
       );
     }
 
-    final response = await _callGroqWithRetry(
-      _buildAtsOnlyPrompt(_safeResumeText(_sanitizeOcrBullets(resumeText))),
+    return _callAndParseWithRetry(
+      prompt: _buildAtsOnlyPrompt(_safeResumeText(_sanitizeOcrBullets(resumeText))),
       model: _primaryModel,
-      maxTokens: 4096,
+      maxTokens: 6144,
+      temperature: 0.3,
+      parse: (response) => _parseAtsResponse(response, userId, resumeId),
     );
-    return _parseAtsResponse(response, userId, resumeId);
   }
 
   /// Rewrites a bullet point into 3 stronger, ATS-optimised variants.
@@ -1002,13 +1005,19 @@ Score on 5 dimensions (20 points each):
 
 STEP 4 — SCORE CALCULATION
   matchScore:   Weighted average of all required skills by evidence level (Step 1)
-  atsScore:     Sum of the following (max 100):
-                  +20 Standard section headers (Experience, Education, Skills, Projects, Summary)
-                  +20 ≥40% of bullets have a number, %, or concrete outcome
-                  +15 Consistent date format throughout
-                  +15 Complete contact block at top (name + email + phone + LinkedIn/GitHub)
-                  +15 Action verbs starting bullets
-                  +15 No tables, columns, graphics, or text boxes
+  atsScore:     Score across 4 dimensions (max 100) — same rubric a dedicated ATS
+                audit would use, so this number means the same thing everywhere:
+                  PARSEABILITY (30): +10 standard section headers (Experience/Education/
+                    Skills/Projects) · +8 consistent parseable dates · +7 complete contact
+                    block (name+email+phone+LinkedIn/GitHub) · +5 no tables/columns/graphics
+                  KEYWORD STRATEGY (25): +10 keywords appear in real achievement context
+                    (not just a skills dump) · +8 full names + abbreviations together
+                    (e.g. "JavaScript (JS)") · +7 action verbs at bullet starts
+                  QUANTIFIED IMPACT (25): +15 if ≥40% of bullets have a number/%/outcome ·
+                    +10 for metric quality (weak="built an app"=0, strong="8K+ downloads,
+                    4.7★"=full weight)
+                  STRUCTURE & FORMAT (20): +8 appropriate length for experience level ·
+                    +7 consistent visual hierarchy · +5 no orphaned lines/mixed bullet styles
   projectScore: Average of all project scores from Step 3
   overallScore: EXACTLY ROUND(matchScore × 0.45 + projectScore × 0.35 + atsScore × 0.20)
                 Verify your arithmetic. Do NOT generously round up.
@@ -1101,13 +1110,16 @@ For EACH technology in [$skillList], evaluate:
 
 SCORING:
   matchScore:   Average confidence across ALL required technologies
-  atsScore:     Resume format quality (0-100):
-                  +20 Standard section headers
-                  +20 ≥40% of bullets quantified
-                  +15 Consistent dates
-                  +15 Complete contact block
-                  +15 Action verbs on bullets
-                  +15 No tables/columns/graphics
+  atsScore:     Score across 4 dimensions (max 100) — same rubric a dedicated ATS
+                audit would use, so this number means the same thing everywhere:
+                  PARSEABILITY (30): +10 standard section headers · +8 consistent
+                    parseable dates · +7 complete contact block · +5 no tables/columns/graphics
+                  KEYWORD STRATEGY (25): +10 keywords in real achievement context ·
+                    +8 full names + abbreviations together · +7 action verbs at bullet starts
+                  QUANTIFIED IMPACT (25): +15 if ≥40% of bullets are quantified ·
+                    +10 for metric quality (weak vs strong evidence)
+                  STRUCTURE & FORMAT (20): +8 appropriate length · +7 consistent
+                    visual hierarchy · +5 no orphaned lines/mixed bullet styles
   projectScore: How directly projects demonstrate this stack
   overallScore: EXACTLY ROUND(matchScore × 0.50 + projectScore × 0.35 + atsScore × 0.15)
 
@@ -1249,6 +1261,7 @@ OUTPUT — Valid JSON only. No markdown. No text outside the JSON.
     String prompt, {
     required String model,
     required int maxTokens,
+    double? temperature,
   }) async {
     final backendUrl = AppConfig.backendUrl;
     if (backendUrl.isEmpty) {
@@ -1269,6 +1282,9 @@ OUTPUT — Valid JSON only. No markdown. No text outside the JSON.
               'prompt': prompt,
               'model': model,
               'maxTokens': maxTokens,
+              // Best-effort: only takes effect once the backend forwards this
+              // field to Groq's request body. Harmless no-op otherwise.
+              if (temperature != null) 'temperature': temperature,
             }),
           )
           .timeout(
@@ -1311,11 +1327,12 @@ OUTPUT — Valid JSON only. No markdown. No text outside the JSON.
     String prompt, {
     required String model,
     required int maxTokens,
+    double? temperature,
     int retries = 1,
   }) async {
     for (int attempt = 0; attempt <= retries; attempt++) {
       try {
-        return await _callGroq(prompt, model: model, maxTokens: maxTokens);
+        return await _callGroq(prompt, model: model, maxTokens: maxTokens, temperature: temperature);
       } on AiException catch (e) {
         // Only retry on transient errors
         final isTransient =
@@ -1331,6 +1348,39 @@ OUTPUT — Valid JSON only. No markdown. No text outside the JSON.
       }
     }
     throw const AiException('All retry attempts failed. Please try again.');
+  }
+
+  /// Calls the model and parses its response, retrying the FULL round-trip
+  /// (regenerate + re-parse) if [parse] throws — not just transient HTTP
+  /// errors like [_callGroqWithRetry] already handles. This covers the model
+  /// truncating mid-JSON, wrapping the JSON in extra prose despite
+  /// instructions, or any other one-off formatting slip that a fresh
+  /// generation attempt usually doesn't repeat.
+  Future<T> _callAndParseWithRetry<T>({
+    required String prompt,
+    required String model,
+    required int maxTokens,
+    required T Function(String rawResponse) parse,
+    double? temperature,
+    int maxAttempts = 2,
+  }) async {
+    for (int attempt = 1; attempt <= maxAttempts; attempt++) {
+      final response = await _callGroqWithRetry(
+        prompt,
+        model: model,
+        maxTokens: maxTokens,
+        temperature: temperature,
+      );
+      try {
+        return parse(response);
+      } catch (e) {
+        if (attempt >= maxAttempts) rethrow;
+        await Future.delayed(const Duration(milliseconds: 400));
+      }
+    }
+    // Unreachable — the loop above always returns or rethrows on the final
+    // attempt — but keeps every code path returning a value for the analyzer.
+    throw const AiException('Analysis failed after retries. Please try again.');
   }
 
   // ignore: unused_element
@@ -1377,6 +1427,18 @@ OUTPUT — Valid JSON only. No markdown. No text outside the JSON.
 
   // ─── Response Parsers ──────────────────────────────────────────────────────────
 
+  /// (matchWeight, projectWeight, atsWeight) per analysis type — must match the
+  /// weights stated in each prompt's SCORE CALCULATION step exactly.
+  (double, double, double) _overallScoreWeights(String analysisType) {
+    switch (analysisType) {
+      case 'custom_tech':
+        return (0.50, 0.35, 0.15);
+      case 'full':
+      default:
+        return (0.45, 0.35, 0.20);
+    }
+  }
+
   AnalysisModel _parseAnalysisResponse(
     String jsonText,
     String userId,
@@ -1389,10 +1451,14 @@ OUTPUT — Valid JSON only. No markdown. No text outside the JSON.
       final matchScore = _clamp(data['matchScore']);
       final atsScore = _clamp(data['atsScore']);
       final projectScore = _clamp(data['projectScore']);
-      // Recalculate overallScore server-side to prevent AI rounding games
+      // overallScore is ALWAYS computed from the formula, never trusted from the
+      // model's own arithmetic — LLMs occasionally miscalculate weighted averages,
+      // and this guarantees the number shown is exactly what the prompt promised,
+      // with the correct weights for this specific analysis type.
+      final (matchWeight, projectWeight, atsWeight) = _overallScoreWeights(analysisType);
       final overallScore = _clamp(
-        data['overallScore'] ??
-            (matchScore * 0.45 + projectScore * 0.35 + atsScore * 0.20).round(),
+        (matchScore * matchWeight + projectScore * projectWeight + atsScore * atsWeight)
+            .round(),
       );
       final aiRec = data['finalRecommendation'] as String? ?? 'Fail';
 
@@ -1428,7 +1494,10 @@ OUTPUT — Valid JSON only. No markdown. No text outside the JSON.
     try {
       final data = _decodeJson(jsonText);
       final atsScore = _clamp(data['atsScore']);
-      final overallScore = _clamp(data['overallScore'] ?? data['atsScore']);
+      // ATS-only has no matchScore/projectScore components, so overallScore is
+      // always exactly atsScore — computed directly rather than trusting a
+      // second AI-reported copy of the same number.
+      final overallScore = atsScore;
       final aiRec = data['finalRecommendation'] as String? ?? 'Fail';
 
       return AnalysisModel(
@@ -1483,6 +1552,11 @@ OUTPUT — Valid JSON only. No markdown. No text outside the JSON.
       clean = clean.substring(start, end + 1);
     }
 
+    // Escape any raw control characters (literal newlines/tabs) that landed
+    // inside string values — valid JSON requires \n/\t, but models sometimes
+    // emit the literal character instead, which breaks jsonDecode entirely.
+    clean = _escapeRawControlCharsInStrings(clean);
+
     try {
       return jsonDecode(clean) as Map<String, dynamic>;
     } catch (_) {
@@ -1492,6 +1566,54 @@ OUTPUT — Valid JSON only. No markdown. No text outside the JSON.
           .replaceAll(RegExp(r',\s*\]'), ']'); // trailing commas in arrays
       return jsonDecode(clean) as Map<String, dynamic>;
     }
+  }
+
+  /// Walks [json] character by character and escapes raw control characters
+  /// (unescaped newline/carriage-return/tab, or anything below U+0020) found
+  /// *inside string values* — outside of strings these are just formatting
+  /// whitespace between tokens and are left alone.
+  String _escapeRawControlCharsInStrings(String json) {
+    final buf = StringBuffer();
+    bool inString = false;
+    bool escaped = false;
+
+    for (int i = 0; i < json.length; i++) {
+      final ch = json[i];
+      final code = ch.codeUnitAt(0);
+
+      if (escaped) {
+        buf.write(ch);
+        escaped = false;
+        continue;
+      }
+      if (ch == '\\') {
+        escaped = true;
+        buf.write(ch);
+        continue;
+      }
+      if (ch == '"') {
+        inString = !inString;
+        buf.write(ch);
+        continue;
+      }
+      if (inString) {
+        if (code == 0x0A) {
+          buf.write(r'\n');
+          continue;
+        }
+        if (code == 0x0D) {
+          buf.write(r'\r');
+          continue;
+        }
+        if (code == 0x09) {
+          buf.write(r'\t');
+          continue;
+        }
+        if (code < 0x20) continue; // drop other stray control chars
+      }
+      buf.write(ch);
+    }
+    return buf.toString();
   }
 
   List<ProjectAnalysis> _parseProjects(Map<String, dynamic> data) {

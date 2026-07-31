@@ -9,6 +9,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import '../core/services/resume_improve_service.dart'; // GeneratedResume, ExperienceEntry, ProjectEntry
 import '../core/services/resume_pdf_service.dart';
 import '../core/services/payment_service.dart';
+import '../core/services/interview_prep_service.dart';
 
 // ─── Service Providers ────────────────────────────────────────────────────────
 
@@ -18,6 +19,10 @@ final resumeImproveServiceProvider = Provider<ResumeImproveService>(
 
 final resumePdfServiceProvider = Provider<ResumePdfService>(
   (_) => ResumePdfService(),
+);
+
+final interviewPrepServiceProvider = Provider<InterviewPrepService>(
+  (_) => InterviewPrepService(),
 );
 
 // ─── Unlock Status Provider ───────────────────────────────────────────────────
@@ -142,12 +147,17 @@ class FixResumeNotifier extends StateNotifier<FixResumeState> {
   Future<void> generatePdf({
     required String resumeText,
     required String name,
+    String? templateId,
   }) async {
     state = state.copyWith(isGeneratingPdf: true);
     try {
+      final style = templateId != null
+          ? ResumeTemplates.byId(templateId)
+          : ResumeTemplates.autoDetect(resumeText);
       final path = await _pdfService.generatePdf(
         resumeText: resumeText,
         fileName: '${name.replaceAll(' ', '_')}_improved_resume',
+        template: style,
       );
       state = state.copyWith(isGeneratingPdf: false, pdfPath: path);
     } catch (e) {
@@ -224,12 +234,17 @@ class JdOptimizeNotifier extends StateNotifier<JdOptimizeState> {
   Future<void> generatePdf({
     required String resumeText,
     required String name,
+    String? templateId,
   }) async {
     state = state.copyWith(isGeneratingPdf: true);
     try {
+      final style = templateId != null
+          ? ResumeTemplates.byId(templateId)
+          : ResumeTemplates.autoDetect(resumeText);
       final path = await _pdfService.generatePdf(
         resumeText: resumeText,
         fileName: '${name.replaceAll(' ', '_')}_jd_optimized_resume',
+        template: style,
       );
       state = state.copyWith(isGeneratingPdf: false, pdfPath: path);
     } catch (e) {
@@ -384,6 +399,7 @@ class ResumeGeneratorState {
   final String? error;
   final String? pdfPath;
   final bool isGeneratingPdf;
+  final String? selectedTemplateId;
 
   const ResumeGeneratorState({
     this.isLoading = false,
@@ -391,6 +407,7 @@ class ResumeGeneratorState {
     this.error,
     this.pdfPath,
     this.isGeneratingPdf = false,
+    this.selectedTemplateId,
   });
 
   ResumeGeneratorState copyWith({
@@ -399,12 +416,14 @@ class ResumeGeneratorState {
     Object? error = _keep,
     String? pdfPath,
     bool? isGeneratingPdf,
+    String? selectedTemplateId,
   }) => ResumeGeneratorState(
     isLoading: isLoading ?? this.isLoading,
     result: result ?? this.result,
     error: error == _keep ? this.error : error as String?,
     pdfPath: pdfPath ?? this.pdfPath,
     isGeneratingPdf: isGeneratingPdf ?? this.isGeneratingPdf,
+    selectedTemplateId: selectedTemplateId ?? this.selectedTemplateId,
   );
 }
 
@@ -449,16 +468,29 @@ class ResumeGeneratorNotifier extends StateNotifier<ResumeGeneratorState> {
     }
   }
 
-  Future<void> generatePdf({required String name}) async {
+  void selectTemplate(String templateId) {
+    state = state.copyWith(selectedTemplateId: templateId);
+  }
+
+  Future<void> generatePdf({required String name, String? templateId}) async {
     final text = state.result?.resumeText;
     if (text == null) return;
     state = state.copyWith(isGeneratingPdf: true);
     try {
+      final effectiveId = templateId ?? state.selectedTemplateId;
+      final style = effectiveId != null
+          ? ResumeTemplates.byId(effectiveId)
+          : ResumeTemplates.autoDetect(text);
       final path = await _pdfService.generatePdf(
         resumeText: text,
         fileName: '${name.replaceAll(' ', '_')}_AI_resume',
+        template: style,
       );
-      state = state.copyWith(isGeneratingPdf: false, pdfPath: path);
+      state = state.copyWith(
+        isGeneratingPdf: false,
+        pdfPath: path,
+        selectedTemplateId: style.id,
+      );
     } catch (e) {
       state = state.copyWith(isGeneratingPdf: false, error: friendlyError(e));
     }
@@ -477,3 +509,120 @@ final resumeGeneratorProvider =
         ref.read(resumePdfServiceProvider),
       ),
     );
+
+// ─── Job Fit + Interview Prep State ────────────────────────────────────────────
+// Free tier: full fit analysis + 5 sample interview questions (isLoading).
+// Paid unlock (₹39, plan key 'interviewPrep'): the remaining ~15 questions,
+// appended onto the same report (isUnlocking) — see interview_prep_service.dart.
+
+class JobFitReportState {
+  final bool isLoading;
+  final bool isUnlocking;
+  final JobFitReport? report;
+  final String? error;
+  final String? pdfPath;
+  final bool isGeneratingPdf;
+
+  const JobFitReportState({
+    this.isLoading = false,
+    this.isUnlocking = false,
+    this.report,
+    this.error,
+    this.pdfPath,
+    this.isGeneratingPdf = false,
+  });
+
+  JobFitReportState copyWith({
+    bool? isLoading,
+    bool? isUnlocking,
+    JobFitReport? report,
+    Object? error = _keep,
+    String? pdfPath,
+    bool? isGeneratingPdf,
+  }) => JobFitReportState(
+    isLoading: isLoading ?? this.isLoading,
+    isUnlocking: isUnlocking ?? this.isUnlocking,
+    report: report ?? this.report,
+    error: error == _keep ? this.error : error as String?,
+    pdfPath: pdfPath ?? this.pdfPath,
+    isGeneratingPdf: isGeneratingPdf ?? this.isGeneratingPdf,
+  );
+}
+
+class JobFitReportNotifier extends StateNotifier<JobFitReportState> {
+  final InterviewPrepService _service;
+  final ResumePdfService _pdfService;
+
+  JobFitReportNotifier(this._service, this._pdfService)
+    : super(const JobFitReportState());
+
+  String _resumeText = '';
+  String _jobDescription = '';
+
+  Future<void> analyze({
+    required String resumeText,
+    required String jobDescription,
+  }) async {
+    _resumeText = resumeText;
+    _jobDescription = jobDescription;
+    state = state.copyWith(isLoading: true, error: null, report: null);
+    try {
+      final report = await _service.analyzeFit(
+        resumeText: resumeText,
+        jobDescription: jobDescription,
+      );
+      state = state.copyWith(isLoading: false, report: report);
+    } catch (e) {
+      state = state.copyWith(isLoading: false, error: friendlyError(e));
+    }
+  }
+
+  /// Fetches the remaining interview questions. Call only after the ₹39
+  /// payment succeeds — this method itself does not check payment status.
+  Future<void> unlockFullReport() async {
+    final report = state.report;
+    if (report == null || report.isFullyUnlocked) return;
+    state = state.copyWith(isUnlocking: true, error: null);
+    try {
+      final extra = await _service.unlockRemainingQuestions(
+        resumeText: _resumeText,
+        jobDescription: _jobDescription,
+        alreadyAsked: report.interviewQuestions,
+      );
+      state = state.copyWith(
+        isUnlocking: false,
+        report: report.withMoreQuestions(extra),
+      );
+    } catch (e) {
+      state = state.copyWith(isUnlocking: false, error: friendlyError(e));
+    }
+  }
+
+  Future<void> generatePdf({required String name}) async {
+    final report = state.report;
+    if (report == null) return;
+    state = state.copyWith(isGeneratingPdf: true);
+    try {
+      final path = await _pdfService.generateInterviewPrepPdf(
+        report: report,
+        candidateName: name,
+        fileName: '${name.replaceAll(' ', '_')}_interview_prep_report',
+      );
+      state = state.copyWith(isGeneratingPdf: false, pdfPath: path);
+    } catch (e) {
+      state = state.copyWith(isGeneratingPdf: false, error: friendlyError(e));
+    }
+  }
+
+  void reset() => state = const JobFitReportState();
+}
+
+final jobFitReportProvider =
+    StateNotifierProvider.autoDispose<JobFitReportNotifier, JobFitReportState>((
+      ref,
+    ) {
+      return JobFitReportNotifier(
+        ref.read(interviewPrepServiceProvider),
+        ref.read(resumePdfServiceProvider),
+      );
+    });

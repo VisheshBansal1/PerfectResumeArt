@@ -22,12 +22,14 @@ import 'package:intl/intl.dart';
 
 import '../../../core/constants/app_theme.dart';
 import '../../../core/router/app_router.dart';
+import '../../../core/services/referral_service.dart';
 import '../../auth/providers/auth_provider.dart';
 import '../../../providers/providers.dart';
 import '../../../providers/stats_provider.dart'; // NEW
 import '../../../models/models.dart';
 import '../../../core/constants/app_constants.dart';
 import '../../premium/screens/premium_hub_screen.dart';
+import '../widgets/app_navigation_drawer.dart';
 import '../widgets/feedback_button.dart'; // NEW
 
 class HomeScreen extends ConsumerWidget {
@@ -113,6 +115,7 @@ class HomeScreen extends ConsumerWidget {
         if (!didPop) _onBackPressed(context);
       },
       child: Scaffold(
+        drawer: const AppNavigationDrawer(),
         appBar: AppBar(
           title: const Text('Resume Analyzer'),
           actions: [
@@ -154,7 +157,7 @@ class HomeScreen extends ConsumerWidget {
 
                   // ── Quick Stats ───────────────────────────────────────────
                   const SizedBox(height: 20),
-                  _buildQuickStats(analyses),
+                  _buildQuickStats(context, analyses),
 
                   // ── Quick Tools ───────────────────────────────────────────
                   const SizedBox(height: 24),
@@ -165,51 +168,7 @@ class HomeScreen extends ConsumerWidget {
                   const SizedBox(height: 12),
                   _buildQuickTools(context),
 
-                  // ── P1 #2: Before vs After ────────────────────────────────
-                  const SizedBox(height: 28),
-                  _buildSectionHeader(
-                    'Real Results, Not Promises',
-                    'A resume that went from ignored to interview-ready:',
-                  ),
-                  const SizedBox(height: 12),
-                  const _BeforeAfterCard(),
-
-                  // ── P2 #4: How It Works ───────────────────────────────────
-                  const SizedBox(height: 28),
-                  _buildSectionHeader(
-                    'How It Works',
-                    'From upload to job-ready in minutes — no guesswork.',
-                  ),
-                  const SizedBox(height: 14),
-                  const _HowItWorksList(),
-                  const SizedBox(height: 14),
-                  SizedBox(
-                    width: double.infinity,
-                    child: OutlinedButton.icon(
-                      onPressed: () => context.push(AppRoutes.uploadResume),
-                      icon: const Icon(Icons.bolt_outlined, size: 18),
-                      label: const Text('Start My Free Analysis'),
-                      style: OutlinedButton.styleFrom(
-                        foregroundColor: AppTheme.primary,
-                        side: BorderSide(color: AppTheme.primary),
-                        padding: const EdgeInsets.symmetric(vertical: 13),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(10),
-                        ),
-                      ),
-                    ),
-                  ),
-
-                  // ── P1 #1: Testimonials ───────────────────────────────────
-                  const SizedBox(height: 28),
-                  _buildSectionHeader(
-                    'What Users Are Saying',
-                    'Real stories from people who landed interviews.',
-                  ),
-                  const SizedBox(height: 12),
-                  const _TestimonialsRow(),
-
-                  // ── Recent Analyses ───────────────────────────────────────
+                  // ── Recent Analyses (moved up — your own stuff first) ─────
                   const SizedBox(height: 28),
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -237,7 +196,7 @@ class HomeScreen extends ConsumerWidget {
                         ? _buildEmptyState(context)
                         : Column(
                             children: list
-                                .take(10)
+                                .take(2)
                                 .map((a) => _AnalysisCard(analysis: a))
                                 .toList(),
                           ),
@@ -249,6 +208,73 @@ class HomeScreen extends ConsumerWidget {
                     ),
                     error: (e, _) => Center(child: Text('Error: $e')),
                   ),
+
+                  // ── Everything below is "why this app is good" content —
+                  // visually separated so the page reads as two clear parts:
+                  // your stuff, then why to trust it. ───────────────────────
+                  const SizedBox(height: 36),
+                  Row(
+                    children: [
+                      Expanded(child: Divider(color: AppTheme.borderLight)),
+                      Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 12),
+                        child: Text(
+                          'WHY IT WORKS',
+                          style: TextStyle(
+                            fontSize: 11,
+                            fontWeight: FontWeight.w700,
+                            letterSpacing: 1,
+                            color: AppTheme.textSecondary.withOpacity(0.7),
+                          ),
+                        ),
+                      ),
+                      Expanded(child: Divider(color: AppTheme.borderLight)),
+                    ],
+                  ),
+
+                  // ── P1 #2: Before vs After ────────────────────────────────
+                  const SizedBox(height: 24),
+                  _buildSectionHeader(
+                    'Real Results, Not Promises',
+                    'A resume that went from ignored to interview-ready:',
+                  ),
+                  const SizedBox(height: 12),
+                  const _BeforeAfterCard(),
+
+                  // ── P2 #4: How It Works ───────────────────────────────────
+                  const SizedBox(height: 24),
+                  _buildSectionHeader(
+                    'How It Works',
+                    'From upload to job-ready in minutes — no guesswork.',
+                  ),
+                  const SizedBox(height: 14),
+                  const _HowItWorksList(),
+                  const SizedBox(height: 14),
+                  SizedBox(
+                    width: double.infinity,
+                    child: OutlinedButton.icon(
+                      onPressed: () => context.push(AppRoutes.uploadResume),
+                      icon: const Icon(Icons.bolt_outlined, size: 18),
+                      label: const Text('Start My Free Analysis'),
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: AppTheme.primary,
+                        side: BorderSide(color: AppTheme.primary),
+                        padding: const EdgeInsets.symmetric(vertical: 13),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                      ),
+                    ),
+                  ),
+
+                  // ── P1 #1: Testimonials ───────────────────────────────────
+                  const SizedBox(height: 24),
+                  _buildSectionHeader(
+                    'What Users Are Saying',
+                    'Real stories from people who landed interviews.',
+                  ),
+                  const SizedBox(height: 12),
+                  const _TestimonialsRow(),
 
                   // Padding so FABs don't obscure last card
                   const SizedBox(height: 120),
@@ -313,7 +339,7 @@ class HomeScreen extends ConsumerWidget {
           Icon(Icons.trending_up_rounded, size: 14, color: AppTheme.accent),
           const SizedBox(width: 6),
           Text(
-            '$count+ resumes analyzed & improved',
+            '${count *100}+ resumes analyzed & improved',
             style: TextStyle(
               fontSize: 12,
               fontWeight: FontWeight.w600,
@@ -346,7 +372,10 @@ class HomeScreen extends ConsumerWidget {
 
   // ── Existing: Quick Stats ───────────────────────────────────────────────────
 
-  Widget _buildQuickStats(AsyncValue<List<AnalysisModel>> analyses) {
+  Widget _buildQuickStats(
+    BuildContext context,
+    AsyncValue<List<AnalysisModel>> analyses,
+  ) {
     return analyses.when(
       data: (list) {
         final avgScore = list.isEmpty
@@ -363,28 +392,31 @@ class HomeScreen extends ConsumerWidget {
                       list.length)
                   .round();
 
-        return Container(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-          decoration: BoxDecoration(
-            gradient: LinearGradient(
-              colors: [AppTheme.primary, AppTheme.primary.withOpacity(0.8)],
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
+        return GestureDetector(
+          onTap: () => context.push(AppRoutes.progress),
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                colors: [AppTheme.primary, AppTheme.primary.withOpacity(0.8)],
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+              ),
+              borderRadius: BorderRadius.circular(16),
             ),
-            borderRadius: BorderRadius.circular(16),
-          ),
-          child: IntrinsicHeight(
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.center,
-              children: [
-                _GradientStatItem(label: 'Analyses', value: '${list.length}'),
-                _VerticalDivider(),
-                _GradientStatItem(label: 'Avg Score', value: '$avgScore%'),
-                _VerticalDivider(),
-                _GradientStatItem(label: 'Best', value: '$bestScore%'),
-                _VerticalDivider(),
-                _GradientStatItem(label: 'Avg ATS', value: '$atsAvg%'),
-              ],
+            child: IntrinsicHeight(
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.center,
+                children: [
+                  _GradientStatItem(label: 'Analyses', value: '${list.length}'),
+                  _VerticalDivider(),
+                  _GradientStatItem(label: 'Avg Score', value: '$avgScore%'),
+                  _VerticalDivider(),
+                  _GradientStatItem(label: 'Best', value: '$bestScore%'),
+                  _VerticalDivider(),
+                  _GradientStatItem(label: 'Avg ATS', value: '$atsAvg%'),
+                ],
+              ),
             ),
           ),
         );
@@ -428,6 +460,38 @@ class HomeScreen extends ConsumerWidget {
         subtitle: 'Enter your own tech stack and check resume fit',
         color: AppTheme.accent,
         onTap: () => context.push(AppRoutes.uploadResume, extra: 'custom'),
+      ),
+      const SizedBox(height: 12),
+      _ToolCardWide(
+        icon: Icons.record_voice_over,
+        title: 'Job Fit + Interview Prep',
+        subtitle: 'Match a resume to any JD and get tailored interview Q&A',
+        color: Colors.teal,
+        onTap: () => context.push(AppRoutes.interviewPrep),
+      ),
+      const SizedBox(height: 12),
+      Row(
+        children: [
+          Expanded(
+            child: _ToolCard(
+              icon: Icons.manage_search,
+              title: 'JD Keyword Match',
+              subtitle: 'Free instant match vs any job post',
+              color: AppTheme.primary,
+              onTap: () => context.push(AppRoutes.jdKeywordMatch),
+            ),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: _ToolCard(
+              icon: Icons.trending_up,
+              title: 'My Progress',
+              subtitle: 'Track your score over time',
+              color: AppTheme.accent,
+              onTap: () => context.push(AppRoutes.progress),
+            ),
+          ),
+        ],
       ),
       const SizedBox(height: 12),
       GestureDetector(
@@ -497,6 +561,7 @@ class HomeScreen extends ConsumerWidget {
           ),
         ),
       ),
+      const SizedBox(height: 12),
     ],
   );
 
@@ -516,7 +581,7 @@ class HomeScreen extends ConsumerWidget {
         const SizedBox(height: 16),
         const Text(
           'No analyses yet',
-          style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+          style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600, color: Colors.black),
         ),
         const SizedBox(height: 6),
         Text(

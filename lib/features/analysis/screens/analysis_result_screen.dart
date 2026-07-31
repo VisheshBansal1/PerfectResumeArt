@@ -9,6 +9,7 @@ import '../../../models/models.dart';
 import '../../../providers/providers.dart';
 import '../../../providers/resume_context_provider.dart';
 import '../../../features/premium/screens/premium_hub_screen.dart';
+import '../../resume/widgets/next_steps_cta.dart';
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -1529,95 +1530,28 @@ class _PremiumCta extends ConsumerWidget {
       });
     }
 
-    return GestureDetector(
-      onTap: () => Navigator.push(
-        context,
-        MaterialPageRoute(
-          builder: (_) => PremiumHubScreen(resumeText: resumeText),
-        ),
-      ),
-      child: Container(
-        width: double.infinity,
-        padding: const EdgeInsets.all(18),
-        decoration: BoxDecoration(
-          gradient: const LinearGradient(
-            colors: [Color(0xFF0A0E1A), Color(0xFF1A1D27)],
-          ),
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: Colors.white.withOpacity(0.1)),
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                const Text('✨', style: TextStyle(fontSize: 20)),
-                const SizedBox(width: 8),
-                const Text(
-                  'Improve This Resume',
-                  style: TextStyle(
-                    color: Colors.white,
-                    fontWeight: FontWeight.w700,
-                    fontSize: 15,
-                  ),
-                ),
-                const Spacer(),
-                Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 8,
-                    vertical: 3,
-                  ),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFFFF6B35).withOpacity(0.2),
-                    borderRadius: BorderRadius.circular(6),
-                  ),
-                  child: const Text(
-                    'Premium',
-                    style: TextStyle(
-                      color: Color(0xFFFF6B35),
-                      fontSize: 11,
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 10),
-            const Text(
-              'AI rewrite · JD matching · ATS boost · PDF download · Human review',
-              style: TextStyle(
-                color: Colors.white54,
-                fontSize: 12,
-                height: 1.4,
+    if (resumeText.isEmpty) return const SizedBox.shrink();
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        NextStepsCta(resumeText: resumeText),
+        const SizedBox(height: 12),
+        Center(
+          child: TextButton(
+            onPressed: () => Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (_) => PremiumHubScreen(resumeText: resumeText),
               ),
             ),
-            const SizedBox(height: 14),
-            Row(
-              children: [
-                Expanded(
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(vertical: 12),
-                    decoration: BoxDecoration(
-                      color: const Color(0xFF2D5BE3),
-                      borderRadius: BorderRadius.circular(10),
-                    ),
-                    child: const Center(
-                      child: Text(
-                        'See All Features →',
-                        style: TextStyle(
-                          color: Colors.white,
-                          fontWeight: FontWeight.w700,
-                          fontSize: 14,
-                        ),
-                      ),
-                    ),
-                  ),
-                ),
-              ],
+            child: Text(
+              'See all premium tools →',
+              style: TextStyle(color: AppTheme.textSecondary, fontSize: 12.5, fontWeight: FontWeight.w600),
             ),
-          ],
+          ),
         ),
-      ),
+      ],
     );
   }
 }

@@ -1,5 +1,8 @@
 import 'dart:typed_data';
+import 'package:cross_file/cross_file.dart';
+import 'package:desktop_drop/desktop_drop.dart';
 import 'package:file_picker/file_picker.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:http_parser/http_parser.dart';
@@ -708,24 +711,58 @@ class _HumanReviewScreenState extends ConsumerState<HumanReviewScreen> {
       if (result == null || result.files.isEmpty) return;
       final file = result.files.single;
       if (file.bytes == null || file.bytes!.isEmpty) return;
-
-      setState(() {
-        _localPdfBytes = Uint8List.fromList(file.bytes!);
-        _localPdfName  = file.name;
-      });
-
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('✅ PDF selected: ${file.name}'),
-            backgroundColor: AppTheme.success,
-            duration: const Duration(seconds: 2),
-          ),
-        );
-      }
+      _applyPickedPdf(Uint8List.fromList(file.bytes!), file.name);
     } catch (e) {
       debugPrint('[HumanReview] PDF pick error: $e');
     }
+  }
+
+  /// Handles a PDF dropped directly onto the attach button (web) — goes
+  /// through the exact same handling as the file picker.
+  Future<void> _handleDroppedPdf(List<XFile> files) async {
+    if (files.isEmpty) return;
+    final dropped = files.first;
+    if (!dropped.name.toLowerCase().endsWith('.pdf')) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Only PDF files are supported here.')),
+        );
+      }
+      return;
+    }
+    try {
+      final bytes = await dropped.readAsBytes();
+      if (bytes.isEmpty) return;
+      _applyPickedPdf(bytes, dropped.name);
+    } catch (e) {
+      debugPrint('[HumanReview] PDF drop error: $e');
+    }
+  }
+
+  void _applyPickedPdf(Uint8List bytes, String name) {
+    setState(() {
+      _localPdfBytes = bytes;
+      _localPdfName = name;
+    });
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('✅ PDF selected: $name'),
+          backgroundColor: AppTheme.success,
+          duration: const Duration(seconds: 2),
+        ),
+      );
+    }
+  }
+
+  /// Wraps [child] so it also accepts a dragged-and-dropped PDF on web,
+  /// without changing its appearance or the mobile tap-to-browse behavior.
+  Widget _dragDropWrap(Widget child) {
+    if (!kIsWeb) return child;
+    return DropTarget(
+      onDragDone: (details) async => _handleDroppedPdf(details.files),
+      child: child,
+    );
   }
 
   Future<void> _sendToBackend({
@@ -1084,10 +1121,12 @@ class _HumanReviewScreenState extends ConsumerState<HumanReviewScreen> {
               const SizedBox(height: 16),
 
               // PDF attach — Step 1.5 between resume display and role
-              _PdfAttachButton(
-                localPdfName: _localPdfName,
-                hasPdfInProvider: ref.watch(resumeContextProvider).hasPdf,
-                onTap: _pickPdf,
+              _dragDropWrap(
+                _PdfAttachButton(
+                  localPdfName: _localPdfName,
+                  hasPdfInProvider: ref.watch(resumeContextProvider).hasPdf,
+                  onTap: _pickPdf,
+                ),
               ),
               const SizedBox(height: 16),
 

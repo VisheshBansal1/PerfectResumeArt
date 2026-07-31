@@ -6,6 +6,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../core/constants/app_constants.dart';
+import '../../core/services/referral_service.dart';
 
 import '../../features/admin/screens/admin_main_screen.dart';
 import '../../features/admin/screens/candidate_detail_screen.dart';
@@ -20,7 +21,15 @@ import '../../features/auth/screens/register_screen.dart';
 
 import '../../features/job_roles/screens/job_selection_screen.dart';
 
+import '../../features/referral/screens/earn_refer_screen.dart';
+import '../../features/referral/screens/referral_admin_screen.dart';
+
+import '../../features/resume/screens/about_screen.dart'; // TODO: adjust path if AboutScreen isn't here
 import '../../features/resume/screens/ats_checker_screen.dart';
+import '../../features/resume/screens/contact_screen.dart';
+import '../../features/resume/screens/interview_prep_screen.dart';
+import '../../features/resume/screens/jd_keyword_match_screen.dart';
+import '../../features/resume/screens/progress_screen.dart';
 import '../../features/resume/screens/home_screen.dart';
 import '../../features/resume/screens/profile_screen.dart';
 import '../../features/resume/screens/upload_resume_screen.dart';
@@ -60,6 +69,16 @@ final appRouterProvider = Provider<GoRouter>((ref) {
     ),
 
     redirect: (context, state) {
+      // Referral Program: second capture attempt on every redirect
+      // evaluation (which runs very early, on first load and every
+      // navigation), not just main()'s one-time check at cold boot. Reads
+      // the real browser URL directly (not state.uri — this app uses hash
+      // URL strategy, so go_router's own location model never sees a bare
+      // ?ref= query param sitting outside the #fragment). Fire-and-forget:
+      // a local storage write, no network call, and never affects the
+      // redirect decision below — existing routing behavior is unchanged.
+      unawaited(ReferralService().captureReferralFromUrl());
+
       final authAsync = ref.read(authStateProvider);
 
       final userAsync = ref.read(currentUserProvider);
@@ -143,6 +162,27 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       ),
 
       GoRoute(
+        path: AppRoutes.interviewPrep,
+        builder: (context, state) {
+          return const InterviewPrepScreen();
+        },
+      ),
+
+      GoRoute(
+        path: AppRoutes.jdKeywordMatch,
+        builder: (context, state) {
+          return const JdKeywordMatchScreen();
+        },
+      ),
+
+      GoRoute(
+        path: AppRoutes.progress,
+        builder: (context, state) {
+          return const ProgressScreen();
+        },
+      ),
+
+      GoRoute(
         path: AppRoutes.profile,
         builder: (context, state) {
           return const ProfileScreen();
@@ -153,6 +193,34 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         path: AppRoutes.jobSelection,
         builder: (context, state) {
           return const JobSelectionScreen();
+        },
+      ),
+
+      GoRoute(
+        path: AppRoutes.earnRefer,
+        builder: (context, state) {
+          return const EarnReferScreen();
+        },
+      ),
+
+      GoRoute(
+        path: AppRoutes.referralAdmin,
+        builder: (context, state) {
+          return const ReferralAdminScreen();
+        },
+      ),
+
+      GoRoute(
+        path: AppRoutes.contactUs,
+        builder: (context, state) {
+          return const ContactScreen();
+        },
+      ),
+
+      GoRoute(
+        path: AppRoutes.about,
+        builder: (context, state) {
+          return const AboutScreen();
         },
       ),
 
@@ -230,9 +298,23 @@ class AppRoutes {
 
   static const String atsChecker = '/ats-checker';
 
+  static const String interviewPrep = '/interview-prep';
+
+  static const String jdKeywordMatch = '/jd-keyword-match';
+
+  static const String progress = '/progress';
+
   static const String profile = '/profile';
 
   static const String jobSelection = '/job-selection';
+
+  static const String earnRefer = '/earn-refer';
+
+  static const String referralAdmin = '/admin/referral';
+
+  static const String contactUs = '/contact';
+
+  static const String about = '/about';
 
   static const String analysisResult = '/analysis/:analysisId';
 

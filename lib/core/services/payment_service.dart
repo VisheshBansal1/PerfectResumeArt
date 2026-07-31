@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 
 import 'app_config.dart';
+import 'auth_token_helper.dart';
 import 'email_service.dart';
 
 // Mobile-only — conditional import prevents web crash
@@ -19,7 +20,7 @@ import 'payment_js_bridge.dart'
 
 // ─── Payment Plans ────────────────────────────────────────────────────────────
 
-enum PaymentPlan { fixResume, jdOptimize, bundle, humanReview, resumeGenerator }
+enum PaymentPlan { fixResume, jdOptimize, bundle, humanReview, resumeGenerator, interviewPrep }
 
 extension PaymentPlanX on PaymentPlan {
   String get title {
@@ -34,6 +35,8 @@ extension PaymentPlanX on PaymentPlan {
         return 'Expert Human Review';
       case PaymentPlan.resumeGenerator:
         return 'AI Resume Builder';
+      case PaymentPlan.interviewPrep:
+        return 'Interview Prep Report';
     }
   }
 
@@ -49,6 +52,8 @@ extension PaymentPlanX on PaymentPlan {
         return 12900;
       case PaymentPlan.resumeGenerator:
         return 4900; // ₹49
+      case PaymentPlan.interviewPrep:
+        return 3900; // ₹39
     }
   }
 
@@ -65,6 +70,8 @@ extension PaymentPlanX on PaymentPlan {
         return 'humanReview';
       case PaymentPlan.resumeGenerator:
         return 'resumeGenerator';
+      case PaymentPlan.interviewPrep:
+        return 'interviewPrep';
     }
   }
 
@@ -80,6 +87,8 @@ extension PaymentPlanX on PaymentPlan {
         return '₹129';
       case PaymentPlan.resumeGenerator:
         return '₹49';
+      case PaymentPlan.interviewPrep:
+        return '₹39';
     }
   }
 
@@ -95,8 +104,48 @@ extension PaymentPlanX on PaymentPlan {
         return 'Expert manually reviews and rewrites your resume in 24 hrs';
       case PaymentPlan.resumeGenerator:
         return 'AI builds a complete professional resume from your info + PDF download';
+      case PaymentPlan.interviewPrep:
+        return 'Full 20-question interview Q&A tailored to this resume + job, with a downloadable PDF';
     }
   }
+}
+
+// ─── Pricing Quote (Referral Program) ─────────────────────────────────────────
+// What the paywall sheet shows BEFORE checkout — computed by the same
+// backend logic that sets the actual Razorpay order amount, so this never
+// drifts from what's actually charged.
+class PricingQuote {
+  final double originalAmount; // ₹
+  final double finalAmount; // ₹ — what will actually be charged
+  final int discountPercent;
+  final bool eligible;
+
+  const PricingQuote({
+    required this.originalAmount,
+    required this.finalAmount,
+    required this.discountPercent,
+    required this.eligible,
+  });
+
+  factory PricingQuote.fromJson(Map<String, dynamic> json, double fallbackAmount) {
+    return PricingQuote(
+      originalAmount: (json['originalAmount'] as num?)?.toDouble() ?? fallbackAmount,
+      finalAmount: (json['finalAmount'] as num?)?.toDouble() ?? fallbackAmount,
+      discountPercent: json['discountPercent'] as int? ?? 0,
+      eligible: json['eligible'] == true,
+    );
+  }
+
+  // Safe default if the quote request fails — full price, no discount.
+  factory PricingQuote.fallback(double amount) => PricingQuote(
+    originalAmount: amount,
+    finalAmount: amount,
+    discountPercent: 0,
+    eligible: false,
+  );
+
+  String get finalAmountDisplay => '\u20b9${finalAmount.toStringAsFixed(finalAmount.truncateToDouble() == finalAmount ? 0 : 2)}';
+  String get originalAmountDisplay => '\u20b9${originalAmount.toStringAsFixed(originalAmount.truncateToDouble() == originalAmount ? 0 : 2)}';
 }
 
 // ─── Payment Result ───────────────────────────────────────────────────────────
@@ -122,6 +171,40 @@ class PaymentService {
 
   Razorpay? _razorpay;
 
+  // Attaches the signed-in user's Firebase ID token when available, so the
+  // backend can check referral eligibility. Never throws — checkout must
+  // keep working (at full price) even if this fails for any reason.
+  Future<Map<String, String>> _authHeaders() async {
+    final headers = {'Content-Type': 'application/json'};
+    try {
+      final token = await getIdTokenSafely();
+      if (token != null) headers['Authorization'] = 'Bearer $token';
+    } catch (e) {
+      debugPrint('[PAY] Could not attach auth token (continuing without it): $e');
+    }
+    return headers;
+  }
+
+  // ── Pricing preview — call before the user taps "Pay" ──────────────────────
+  Future<PricingQuote> getQuote(PaymentPlan plan) async {
+    final fallback = plan.amountInPaise / 100;
+    try {
+      final headers = await _authHeaders();
+      final response = await http
+          .get(
+            Uri.parse('$_backendUrl/api/referral/quote?plan=${plan.planKey}'),
+            headers: headers,
+          )
+          .timeout(const Duration(seconds: 10));
+      if (response.statusCode != 200) return PricingQuote.fallback(fallback);
+      final data = jsonDecode(response.body) as Map<String, dynamic>;
+      return PricingQuote.fromJson(data, fallback);
+    } catch (e) {
+      debugPrint('[PAY] getQuote failed, falling back to full price: $e');
+      return PricingQuote.fallback(fallback);
+    }
+  }
+
   // ── Step 1: Create order via backend ────────────────────────────────────────
   Future<Map<String, dynamic>?> _createOrder(PaymentPlan plan) async {
     final url = '$_backendUrl/api/payment/create-order';
@@ -131,7 +214,7 @@ class PaymentService {
     try {
       response = await http.post(
         Uri.parse(url),
-        headers: {'Content-Type': 'application/json'},
+        headers: await _authHeaders(),
         body: jsonEncode({'plan': plan.planKey}),
       );
     } catch (e) {
@@ -169,7 +252,7 @@ class PaymentService {
     try {
       final response = await http.post(
         Uri.parse('$_backendUrl/api/payment/verify-payment'),
-        headers: {'Content-Type': 'application/json'},
+        headers: await _authHeaders(),
         body: jsonEncode({
           'razorpay_order_id': orderId,
           'razorpay_payment_id': paymentId,
@@ -355,6 +438,10 @@ class PaymentService {
         return;
       }
       final orderId = orderData['order_id'] as String;
+      // FIX: use the amount Razorpay actually charges (order-authoritative,
+      // may be discounted) — NOT plan.amountInPaise, which is always the
+      // undiscounted sticker price and would mismatch a referral discount.
+      final amount = orderData['amount'] as int;
 
       _razorpay = Razorpay();
       _razorpay!.on(Razorpay.EVENT_PAYMENT_SUCCESS, (PaymentSuccessResponse r) {
@@ -382,7 +469,7 @@ class PaymentService {
       });
       _razorpay!.open({
         'key': _keyId,
-        'amount': plan.amountInPaise,
+        'amount': amount,
         'currency': 'INR',
         'order_id': orderId,
         'name': 'Resume AI',
@@ -447,6 +534,19 @@ class _PaywallSheetState extends State<PaywallSheet> {
   bool _loading = false;
   String? _error;
 
+  PricingQuote? _quote;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadQuote();
+  }
+
+  Future<void> _loadQuote() async {
+    final quote = await _paymentService.getQuote(widget.plan);
+    if (mounted) setState(() => _quote = quote);
+  }
+
   Future<void> _pay() async {
     setState(() {
       _loading = true;
@@ -506,7 +606,9 @@ class _PaywallSheetState extends State<PaywallSheet> {
         userName: widget.userName,
         userEmail: widget.userEmail,
         planName: widget.plan.title,
-        amount: widget.plan.displayPrice,
+        amount: (_quote?.eligible == true)
+            ? _quote!.finalAmountDisplay
+            : widget.plan.displayPrice,
       );
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -611,6 +713,8 @@ class _PaywallSheetState extends State<PaywallSheet> {
                 ),
               ),
             ),
+            const SizedBox(height: 20),
+            _buildPricingRow(),
             const SizedBox(height: 24),
             if (_error != null)
               Container(
@@ -650,7 +754,7 @@ class _PaywallSheetState extends State<PaywallSheet> {
                         ),
                       )
                     : Text(
-                        'Unlock for ${plan.displayPrice}',
+                        'Unlock for ${(_quote?.eligible == true) ? _quote!.finalAmountDisplay : plan.displayPrice}',
                         style: const TextStyle(
                           fontSize: 16,
                           fontWeight: FontWeight.w700,
@@ -666,6 +770,77 @@ class _PaywallSheetState extends State<PaywallSheet> {
             ),
           ],
         ),
+      ),
+    );
+  }
+
+  // Referral Program — shows Original Price / Discount / Final Price with a
+  // "Launch Partner Discount Applied" badge when the signed-in user is a
+  // referred first-time buyer during an active campaign. Renders nothing
+  // (not even a placeholder) when there's no discount, so the sheet looks
+  // exactly as it always has for everyone else.
+  Widget _buildPricingRow() {
+    final quote = _quote;
+    if (quote == null || !quote.eligible) return const SizedBox.shrink();
+
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: const Color(0xFF43A047).withOpacity(0.08),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: const Color(0xFF43A047).withOpacity(0.3)),
+      ),
+      child: Column(
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              const Icon(Icons.local_offer, color: Color(0xFF43A047), size: 16),
+              const SizedBox(width: 6),
+              Text(
+                'Launch Partner Discount Applied',
+                style: const TextStyle(
+                  color: Color(0xFF2E7D32),
+                  fontSize: 12,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text(
+                quote.originalAmountDisplay,
+                style: TextStyle(
+                  fontSize: 14,
+                  color: Colors.grey[600],
+                  decoration: TextDecoration.lineThrough,
+                ),
+              ),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF43A047),
+                  borderRadius: BorderRadius.circular(6),
+                ),
+                child: Text(
+                  '${quote.discountPercent}% OFF',
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 11,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ),
+              Text(
+                quote.finalAmountDisplay,
+                style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w800),
+              ),
+            ],
+          ),
+        ],
       ),
     );
   }
@@ -711,6 +886,14 @@ class _PaywallSheetState extends State<PaywallSheet> {
           'Top 10 ATS keywords for your target role',
           '4 best-fit job role suggestions',
           '🔗 LinkedIn About section (bonus)',
+        ];
+      case PaymentPlan.interviewPrep:
+        return [
+          'All 20 interview questions unlocked (5 already shown)',
+          'HR, Technical, Coding, Behavioural, Project & Resume-based rounds',
+          'Model answers written from your actual resume',
+          'Final recruiter advice for this specific role',
+          '📄 Download the complete report as PDF',
         ];
     }
   }

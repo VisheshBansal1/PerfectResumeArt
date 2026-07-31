@@ -1,26 +1,275 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
+  <!-- ═══════════════════════════════════════════════════════════════════
+       FLUTTER REQUIREMENT — base href
+       Do not move or remove. Must stay effectively first in <head> exactly
+       as Flutter's own build output places it; this is templated by
+       Flutter at build/serve time ($FLUTTER_BASE_HREF).
+  ═══════════════════════════════════════════════════════════════════ -->
   <base href="$FLUTTER_BASE_HREF">
+
+  <!-- ═══════════════════════════════════════════════════════════════════
+       CHARACTER ENCODING & BROWSER COMPATIBILITY
+  ═══════════════════════════════════════════════════════════════════ -->
   <meta charset="UTF-8">
-  <meta content="IE=Edge" http-equiv="X-UA-Compatible">
+  <meta http-equiv="X-UA-Compatible" content="IE=edge">
+
+  <!-- ═══════════════════════════════════════════════════════════════════
+       VIEWPORT & MOBILE OPTIMIZATION
+       No maximum-scale/user-scalable=no here on purpose — locking zoom
+       fails accessibility audits (low-vision users need pinch-zoom).
+  ═══════════════════════════════════════════════════════════════════ -->
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
   <meta name="mobile-web-app-capable" content="yes">
+  <meta name="HandheldFriendly" content="true">
+  <meta name="format-detection" content="telephone=no">
+
+  <!-- ═══════════════════════════════════════════════════════════════════
+       SEO — PRIMARY META TAGS
+       Placeholder domain used throughout this file: https://perfectresumeart.com
+       Replace every occurrence with your real production domain once you've
+       deployed (Netlify/Cloudflare/custom) — search didn't find an existing
+       live domain for this app, so nothing was assumed here.
+  ═══════════════════════════════════════════════════════════════════ -->
+  <title>Perfect Resume Art — Free AI Resume Analyzer & ATS Score Checker</title>
+  <meta name="description" content="Perfect Resume Art analyzes your resume with AI in seconds — get a free ATS score, match your resume against any job description, and fix weak sections. Premium AI resume builder and optimization tools available.">
+  <meta name="keywords" content="AI resume analyzer, ATS score checker, free resume checker, resume builder, ATS resume scanner, job description match, resume optimization, applicant tracking system checker, AI resume review, resume fix suggestions">
+  <meta name="author" content="Perfect Resume Art">
+  <meta name="robots" content="index, follow, max-image-preview:large, max-snippet:-1, max-video-preview:-1">
+  <meta name="googlebot" content="index, follow">
+  <link rel="canonical" href="https://perfectresumeart.netlify.app//">
+  <meta http-equiv="content-language" content="en">
+  <meta name="referrer" content="strict-origin-when-cross-origin">
+
+  <!-- ═══════════════════════════════════════════════════════════════════
+       APPLE MOBILE WEB APP TAGS
+  ═══════════════════════════════════════════════════════════════════ -->
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black">
-  <meta name="apple-mobile-web-app-title" content="AI Resume Analyzer">
-  <meta name="description" content="AI Resume Analyzer">
+  <meta name="apple-mobile-web-app-title" content="Perfect Resume Art">
+  <link rel="apple-touch-icon" href="icons/Icon-192.png">
+  <!-- If you generate dedicated sizes, add them for sharper home-screen icons:
+  <link rel="apple-touch-icon" sizes="152x152" href="icons/apple-touch-icon-152.png">
+  <link rel="apple-touch-icon" sizes="167x167" href="icons/apple-touch-icon-167.png">
+  <link rel="apple-touch-icon" sizes="180x180" href="icons/apple-touch-icon-180.png">
+  -->
+
+  <!-- ═══════════════════════════════════════════════════════════════════
+       MICROSOFT / WINDOWS TILE TAGS
+       msapplication-config points at browserconfig.xml — only add that
+       file if you actually want custom Windows tile behaviour; harmless
+       to leave unreferenced-but-missing (browsers just ignore a 404 here).
+  ═══════════════════════════════════════════════════════════════════ -->
+  <meta name="msapplication-TileColor" content="#2D5BE3">
+  <meta name="msapplication-TileImage" content="icons/Icon-192.png">
+  <meta name="msapplication-config" content="browserconfig.xml">
+  <meta name="msapplication-tap-highlight" content="no">
+
+  <!-- ═══════════════════════════════════════════════════════════════════
+       THEME COLOR & COLOR SCHEME
+       #2D5BE3 = your existing AppTheme.primary from the Flutter app.
+  ═══════════════════════════════════════════════════════════════════ -->
+  <meta name="theme-color" content="#2D5BE3">
+  <meta name="color-scheme" content="light dark">
+
+  <!-- ═══════════════════════════════════════════════════════════════════
+       OPEN GRAPH (Facebook, LinkedIn, WhatsApp previews, etc.)
+       og:image should be a real 1200×630 social preview image — the
+       512×512 app icon works but is not ideal; swap in a dedicated
+       banner at that path once you have one.
+  ═══════════════════════════════════════════════════════════════════ -->
+  <meta property="og:title" content="Perfect Resume Art — Free AI Resume Analyzer & ATS Score Checker">
+  <meta property="og:description" content="Get a free AI-powered ATS score, match your resume against any job description, and fix weak sections in seconds.">
+  <meta property="og:image" content="https://perfectresumeart.netlify.app//icons/Icon-512.png">
+  <meta property="og:image:width" content="512">
+  <meta property="og:image:height" content="512">
+  <meta property="og:url" content="https://perfectresumeart.netlify.app//">
+  <meta property="og:type" content="website">
+  <meta property="og:site_name" content="Perfect Resume Art">
+  <meta property="og:locale" content="en_US">
+
+  <!-- ═══════════════════════════════════════════════════════════════════
+       TWITTER / X CARD
+  ═══════════════════════════════════════════════════════════════════ -->
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="Perfect Resume Art — Free AI Resume Analyzer & ATS Score Checker">
+  <meta name="twitter:description" content="Get a free AI-powered ATS score, match your resume against any job description, and fix weak sections in seconds.">
+  <meta name="twitter:image" content="https://perfectresumeart.netlify.app//icons/Icon-512.png">
+  <!-- <meta name="twitter:creator" content="@YourHandle"> add once you have one -->
+
+  <!-- ═══════════════════════════════════════════════════════════════════
+       FAVICONS / PWA ICONS
+  ═══════════════════════════════════════════════════════════════════ -->
+  <link rel="icon" type="image/png" href="favicon.png"/>
+  <!-- Flutter's default web build only outputs favicon.png, not a .ico.
+       Add one (any favicon generator) and uncomment for older-browser support:
+  <link rel="icon" href="favicon.ico" sizes="any"> -->
+  <!-- Safari pinned-tab icon — needs a real single-color SVG at this path:
+  <link rel="mask-icon" href="icons/safari-pinned-tab.svg" color="#2D5BE3"> -->
+  <link rel="manifest" href="manifest.json">
+
+  <!-- ═══════════════════════════════════════════════════════════════════
+       SEARCH ENGINE VERIFICATION — placeholders only, all inactive.
+       Uncomment and fill in once you register each property.
+  ═══════════════════════════════════════════════════════════════════ -->
+  <!-- <meta name="google-site-verification" content="YOUR_GOOGLE_SEARCH_CONSOLE_CODE"> -->
+  <!-- <meta name="msvalidate.01" content="YOUR_BING_WEBMASTER_CODE"> -->
+  <!-- <meta name="yandex-verification" content="YOUR_YANDEX_WEBMASTER_CODE"> -->
+
+  <!-- ═══════════════════════════════════════════════════════════════════
+       GOOGLE SIGN-IN — existing credential, preserved exactly as provided.
+  ═══════════════════════════════════════════════════════════════════ -->
   <meta
   name="google-signin-client_id"
   content="714792558226-3psg4f1obo97f2l9jn652mac6uajpesg.apps.googleusercontent.com">
-  <link rel="apple-touch-icon" href="icons/Icon-192.png">
-  <link rel="icon" type="image/png" href="favicon.png"/>
-  <title>AI Resume Analyzer</title>
-  <link rel="manifest" href="manifest.json">
 
+  <!-- ═══════════════════════════════════════════════════════════════════
+       PERFORMANCE — RESOURCE HINTS
+       preconnect for origins this page/app definitely talks to;
+       dns-prefetch as a cheap fallback for older browsers that don't
+       support preconnect.
+  ═══════════════════════════════════════════════════════════════════ -->
+  <link rel="preconnect" href="https://checkout.razorpay.com">
+  <link rel="dns-prefetch" href="https://checkout.razorpay.com">
+  <link rel="preconnect" href="https://pagead2.googlesyndication.com">
+  <link rel="dns-prefetch" href="https://pagead2.googlesyndication.com">
+  <link rel="preconnect" href="https://resume-ai-backend-bwzx.onrender.com">
+  <link rel="dns-prefetch" href="https://resume-ai-backend-bwzx.onrender.com">
+  <link rel="preconnect" href="https://firestore.googleapis.com">
+  <link rel="preconnect" href="https://identitytoolkit.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <!--
-    Razorpay Checkout.js — loaded SYNCHRONOUSLY (no defer/async)
-    so it is 100% ready before Flutter calls registerRazorpayCallbacks
+    Font-loading note: if your Flutter build doesn't declare any web fonts
+    (check web/index.html's own <style> / pubspec for FontManifest usage),
+    the fonts.gstatic.com preconnect above is harmless but unnecessary —
+    remove it if you're not loading any Google Fonts.
   -->
+
+  <!-- ═══════════════════════════════════════════════════════════════════
+       GOOGLE ADSENSE
+  ═══════════════════════════════════════════════════════════════════ -->
+  <script async
+  src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-5737850023326024"
+  crossorigin="anonymous"></script>
+
+  <!-- ═══════════════════════════════════════════════════════════════════
+       STRUCTURED DATA (JSON-LD)
+       Kept deliberately conservative — no aggregateRating/review data is
+       included since none of it would be real, and fabricated ratings are
+       a Google structured-data policy violation that can trigger a manual
+       action. Add aggregateRating yourself once you have genuine reviews.
+  ═══════════════════════════════════════════════════════════════════ -->
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "Organization",
+    "name": "Perfect Resume Art",
+    "url": "https://perfectresumeart.netlify.app/",
+    "logo": "https://perfectresumeart.netlify.app//icons/Icon-512.png",
+    "description": "AI-powered resume analysis, ATS scoring, and resume building platform."
+  }
+  </script>
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "WebSite",
+    "name": "Perfect Resume Art",
+    "url": "https://perfectresumeart.netlify.app/"
+  }
+  </script>
+  <!--
+    SearchAction omitted deliberately — it should only be included if the
+    site actually has an internal search endpoint that supports a query
+    URL pattern. Adding one that doesn't correspond to a real feature is
+    invalid structured data. Add it here if/when that exists:
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "WebSite",
+    "url": "https://perfectresumeart.com",
+    "potentialAction": {
+      "@type": "SearchAction",
+      "target": "https://perfectresumeart.com/search?q={search_term_string}",
+      "query-input": "required name=search_term_string"
+    }
+  }
+  </script>
+  -->
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "SoftwareApplication",
+    "name": "Perfect Resume Art",
+    "applicationCategory": "BusinessApplication",
+    "operatingSystem": "Web, Android, iOS",
+    "description": "AI resume analyzer with ATS scoring, job description matching, resume fix suggestions, and an AI resume builder.",
+    "offers": {
+      "@type": "Offer",
+      "price": "0",
+      "priceCurrency": "INR",
+      "description": "Free ATS score check, with premium AI tools available via one-time purchase or a rewarded-ad unlock."
+    }
+  }
+  </script>
+
+  <!-- ═══════════════════════════════════════════════════════════════════
+       ANALYTICS / TRACKING — PLACEHOLDERS ONLY, ALL DISABLED
+       Everything below is an inert HTML comment on purpose (per spec:
+       "Do NOT enable them"). Uncomment only the ones you actually set up,
+       and replace every ID first — a live script tag with a fake ID will
+       throw console errors and fail network requests.
+  ═══════════════════════════════════════════════════════════════════ -->
+
+  <!-- Google Analytics 4 (GA4) — replace G-XXXXXXXXXX, then uncomment:
+  <script async src="https://www.googletagmanager.com/gtag/js?id=G-XXXXXXXXXX"></script>
+  <script>
+    window.dataLayer = window.dataLayer || [];
+    function gtag(){dataLayer.push(arguments);}
+    gtag('js', new Date());
+    gtag('config', 'G-XXXXXXXXXX');
+  </script>
+  -->
+
+  <!-- Google Tag Manager — replace GTM-XXXXXXX, then uncomment (also needs
+       the matching <noscript> iframe placed right after <body>):
+  <script>
+    (function(w,d,s,l,i){w[l]=w[l]||[];w[l].push({'gtm.start':
+    new Date().getTime(),event:'gtm.js'});var f=d.getElementsByTagName(s)[0],
+    j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
+    'https://www.googletagmanager.com/gtm.js?id='+i+dl;f.parentNode.insertBefore(j,f);
+    })(window,document,'script','dataLayer','GTM-XXXXXXX');
+  </script>
+  -->
+
+  <!-- Microsoft Clarity — replace YOUR_CLARITY_ID, then uncomment:
+  <script type="text/javascript">
+    (function(c,l,a,r,i,t,y){
+      c[a]=c[a]||function(){(c[a].q=c[a].q||[]).push(arguments)};
+      t=l.createElement(r);t.async=1;t.src="https://www.clarity.ms/tag/"+i;
+      y=l.getElementsByTagName(r)[0];y.parentNode.insertBefore(t,y);
+    })(window, document, "clarity", "script", "YOUR_CLARITY_ID");
+  </script>
+  -->
+
+  <!-- ═══════════════════════════════════════════════════════════════════
+       SECURITY — WHAT META TAGS CAN ACTUALLY DO
+       Real security headers (Content-Security-Policy, X-Frame-Options,
+       Strict-Transport-Security, X-Content-Type-Options) are HTTP
+       response headers, not meta tags — browsers ignore most of them
+       when set via <meta>, and a wrong CSP here (blocking Razorpay,
+       AdSense, or Firebase auth) would break the app with no easy way to
+       roll it back without rebuilding. Set these at your host instead:
+         • Netlify:    a `_headers` file at the site root
+         • Cloudflare: Transform Rules / Response Headers
+       `referrer` above is the one policy that's legitimately meta-settable.
+  ═══════════════════════════════════════════════════════════════════ -->
+
+  <!-- ═══════════════════════════════════════════════════════════════════
+       RAZORPAY WEB PAYMENT BRIDGE — EXISTING CODE, PRESERVED EXACTLY
+       Loaded SYNCHRONOUSLY (no defer/async) so it is 100% ready before
+       Flutter calls registerRazorpayCallbacks. Do not add async/defer.
+  ═══════════════════════════════════════════════════════════════════ -->
   <script src="https://checkout.razorpay.com/v1/checkout.js"></script>
 
   <script>
@@ -122,6 +371,22 @@
 </head>
 
 <body>
+  <!-- Accessibility / SEO fallback for JS-disabled clients and crawlers
+       that don't execute JavaScript — Flutter web requires JS to run. -->
+  <noscript>
+    <div style="font-family: sans-serif; text-align: center; padding: 40px 20px;">
+      <h1>Perfect Resume Art</h1>
+      <p>This app requires JavaScript to run. Please enable JavaScript in your
+      browser to use the AI resume analyzer, ATS score checker, and resume
+      builder.</p>
+    </div>
+  </noscript>
+
+  <!-- Google Tag Manager (noscript) — only needed if you enable GTM above:
+  <noscript><iframe src="https://www.googletagmanager.com/ns.html?id=GTM-XXXXXXX"
+  height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
+  -->
+
   <!--
     Flutter Web Bootstrap
     flutter_bootstrap.js is auto-generated by Flutter during build/run.

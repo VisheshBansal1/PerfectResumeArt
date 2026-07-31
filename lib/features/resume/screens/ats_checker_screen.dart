@@ -1,16 +1,16 @@
-import 'dart:io';
-import 'dart:typed_data';
-import 'package:flutter/foundation.dart' show kIsWeb;
-import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../core/constants/app_theme.dart';
 import '../../../core/router/app_router.dart';
+import '../../../core/services/local_resume_analyzer.dart';
 import '../../../providers/providers.dart';
 import '../../../providers/resume_context_provider.dart';
-import 'package:dotted_border/dotted_border.dart';
+import '../widgets/loaded_resume_card.dart';
+import '../widgets/local_scan_widgets.dart';
+import '../widgets/next_steps_cta.dart';
+import '../widgets/resume_input_panel.dart';
 
 class AtsCheckerScreen extends ConsumerStatefulWidget {
   const AtsCheckerScreen({super.key});
@@ -20,118 +20,42 @@ class AtsCheckerScreen extends ConsumerStatefulWidget {
 }
 
 class _AtsCheckerScreenState extends ConsumerState<AtsCheckerScreen> {
-  File? _selectedFile;
-  String? _fileType;
-  List<int>? _selectedBytes;
-  String? _selectedFileName;
-
-  Future<void> _pickFile() async {
-    final result = await FilePicker.platform.pickFiles(
-      type: FileType.custom,
-      allowedExtensions: ['pdf', 'jpg', 'jpeg', 'png'],
-      withData: kIsWeb, // bytes only needed on web
-    );
-    if (result == null) return;
-
-    final picked = result.files.single;
-    final ext = (picked.extension ?? '').toLowerCase();
-    final allowed = ['pdf', 'jpg', 'jpeg', 'png'];
-    if (!allowed.contains(ext)) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Unsupported file ".$ext". Use PDF, JPG, or PNG.'),
-        ),
-      );
-      return;
-    }
-
-    if (kIsWeb) {
-      // Web: use bytes — no real file path available
-      final bytes = picked.bytes;
-      if (bytes == null || bytes.isEmpty) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Could not read file. Please try again.'),
-          ),
-        );
-        return;
-      }
-      setState(() {
-        _selectedBytes = bytes;
-        _selectedFileName = picked.name;
-        _fileType = ext;
-        _selectedFile = null;
-      });
-      await ref
-          .read(resumeUploadProvider.notifier)
-          .extractTextFromBytes(
-            bytes: Uint8List.fromList(bytes),
-            extension: ext,
-          );
-    } else {
-      // Mobile/Desktop: use File path
-      if (picked.path == null) return;
-      final file = File(picked.path!);
-      if (!await file.exists()) return;
-      setState(() {
-        _selectedFile = file;
-        _fileType = ext;
-        _selectedBytes = null;
-        _selectedFileName = null;
-      });
-      await ref.read(resumeUploadProvider.notifier).extractText(file);
-      // Save to global context
-      final extracted = ref.read(resumeUploadProvider).extractedText ?? '';
-      if (extracted.isNotEmpty) {
-        await ref
-            .read(resumeContextProvider.notifier)
-            .setResume(extracted, source: 'ats');
-      }
-    }
-  }
+  ResumeInputResult? _currentInput;
+  bool _changingResume = false;
 
   Future<void> _runAtsCheck() async {
-    // If no new file but resume is in context, use it directly
-    final ctx = ref.read(resumeContextProvider);
-    if (_selectedFile == null && _selectedBytes == null && ctx.hasResume) {
-      final analysisId = await ref
-          .read(resumeUploadProvider.notifier)
-          .uploadAndAnalyzeAtsFromText(ctx.text);
-      if (analysisId != null && mounted) {
-        ref.invalidate(userAnalysesProvider);
-        context.go(AppRoutes.analysisResultWithId(analysisId));
-      }
-      return;
+    final input = _currentInput;
+    String? analysisId;
+
+    if (input != null && input.isFromFile && input.bytes != null) {
+      // Real file this session — use it directly (accurate file name/type in metadata)
+      analysisId = await ref.read(resumeUploadProvider.notifier).uploadAndAnalyzeAtsFromBytes(
+            bytes: input.bytes!,
+            fileName: input.fileName ?? 'resume',
+            extension: input.extension ?? 'pdf',
+          );
+    } else {
+      // Pasted text, or a resume already sitting in the shared context from another
+      // screen — same canonical AiService.analyzeAtsOnly call either way.
+      final ctx = ref.read(resumeContextProvider);
+      if (!ctx.hasResume) return;
+      analysisId = await ref.read(resumeUploadProvider.notifier).uploadAndAnalyzeAtsFromText(ctx.text);
     }
 
-    if (kIsWeb) {
-      if (_selectedBytes == null) return;
-      final analysisId = await ref
-          .read(resumeUploadProvider.notifier)
-          .uploadAndAnalyzeAtsFromBytes(
-            bytes: Uint8List.fromList(_selectedBytes!),
-            fileName: _selectedFileName ?? 'resume',
-            extension: _fileType ?? 'pdf',
-          );
-      if (analysisId != null && mounted) {
-        ref.invalidate(userAnalysesProvider);
-        context.go(AppRoutes.analysisResultWithId(analysisId));
-      }
-    } else {
-      if (_selectedFile == null) return;
-      final analysisId = await ref
-          .read(resumeUploadProvider.notifier)
-          .uploadAndAnalyzeAts(file: _selectedFile!);
-      if (analysisId != null && mounted) {
-        ref.invalidate(userAnalysesProvider);
-        context.go(AppRoutes.analysisResultWithId(analysisId));
-      }
+    if (analysisId != null && mounted) {
+      ref.invalidate(userAnalysesProvider);
+      context.go(AppRoutes.analysisResultWithId(analysisId));
     }
   }
 
   @override
   Widget build(BuildContext context) {
     final uploadState = ref.watch(resumeUploadProvider);
+    final ctx = ref.watch(resumeContextProvider);
+    final scanText = (uploadState.extractedText?.isNotEmpty ?? false)
+        ? uploadState.extractedText!
+        : ctx.text;
+    final showPanel = !ctx.hasResume || _changingResume;
 
     return Scaffold(
       appBar: AppBar(title: const Text('ATS Checker')),
@@ -142,93 +66,49 @@ class _AtsCheckerScreenState extends ConsumerState<AtsCheckerScreen> {
           children: [
             _buildHeader(),
             const SizedBox(height: 16),
-            // Show existing resume status
-            _buildResumeStatus(),
-            const SizedBox(height: 16),
             _buildWhatIsAts(),
             const SizedBox(height: 24),
-            _buildChecklist(),
+            _buildInstantScanSection(scanText),
+            const SizedBox(height: 20),
+            _buildJdMatchCta(),
             const SizedBox(height: 28),
-            const Text(
-              'Upload Your Resume',
-              style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
-            ),
+            const Text('Your Resume', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
             const SizedBox(height: 12),
-            _buildFileDropZone(),
-            if (_selectedFile != null || _selectedBytes != null)
-              _buildFilePreview(uploadState),
+            if (!showPanel)
+              LoadedResumeCard(
+                onChangeRequested: () => setState(() => _changingResume = true),
+                onRemoved: () => setState(() => _currentInput = null),
+              )
+            else ...[
+              ResumeInputPanel(
+                accentColor: Colors.purple,
+                source: 'ats',
+                onResumeReady: (result) => setState(() {
+                  _currentInput = result;
+                  _changingResume = false;
+                }),
+                onCleared: () => setState(() => _currentInput = null),
+              ),
+              if (ctx.hasResume && _changingResume) ...[
+                const SizedBox(height: 10),
+                Center(
+                  child: TextButton(
+                    onPressed: () => setState(() => _changingResume = false),
+                    child: const Text('Cancel', style: TextStyle(fontSize: 12.5)),
+                  ),
+                ),
+              ],
+            ],
             const SizedBox(height: 24),
-            _buildRunButton(uploadState),
+            _buildRunButton(uploadState, ctx),
             if (uploadState.error != null) _buildError(uploadState.error!),
+            if (scanText.trim().length >= 80) ...[
+              const SizedBox(height: 32),
+              NextStepsCta(resumeText: scanText),
+            ],
             const SizedBox(height: 40),
           ],
         ),
-      ),
-    );
-  }
-
-  Widget _buildResumeStatus() {
-    final ctx = ref.watch(resumeContextProvider);
-    if (ctx.hasResume) {
-      return Container(
-        padding: const EdgeInsets.all(12),
-        decoration: BoxDecoration(
-          color: AppTheme.success.withOpacity(0.08),
-          borderRadius: BorderRadius.circular(10),
-          border: Border.all(color: AppTheme.success.withOpacity(0.3)),
-        ),
-        child: Row(
-          children: [
-            const Icon(Icons.check_circle, color: AppTheme.success, size: 18),
-            const SizedBox(width: 8),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Text(
-                    'Resume already loaded ✅',
-                    style: TextStyle(
-                      fontWeight: FontWeight.w700,
-                      fontSize: 12,
-                      color: AppTheme.success,
-                    ),
-                  ),
-                  Text(
-                    'Upload a new one below to re-check, or tap Run ATS Check directly',
-                    style: TextStyle(
-                      fontSize: 11,
-                      color: AppTheme.textSecondary,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ],
-        ),
-      );
-    }
-    return Container(
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: Colors.orange.withOpacity(0.08),
-        borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: Colors.orange.withOpacity(0.3)),
-      ),
-      child: const Row(
-        children: [
-          Icon(Icons.info_outline, color: Colors.orange, size: 18),
-          SizedBox(width: 8),
-          Expanded(
-            child: Text(
-              'Upload your resume PDF below to run the ATS check',
-              style: TextStyle(
-                fontSize: 12,
-                color: Colors.orange,
-                fontWeight: FontWeight.w600,
-              ),
-            ),
-          ),
-        ],
       ),
     );
   }
@@ -252,11 +132,7 @@ class _AtsCheckerScreenState extends ConsumerState<AtsCheckerScreen> {
             color: Colors.white.withOpacity(0.2),
             borderRadius: BorderRadius.circular(14),
           ),
-          child: const Icon(
-            Icons.fact_check_outlined,
-            color: Colors.white,
-            size: 30,
-          ),
+          child: const Icon(Icons.fact_check_outlined, color: Colors.white, size: 30),
         ),
         const SizedBox(width: 16),
         const Expanded(
@@ -265,11 +141,7 @@ class _AtsCheckerScreenState extends ConsumerState<AtsCheckerScreen> {
             children: [
               Text(
                 'ATS Compatibility Checker',
-                style: TextStyle(
-                  color: Colors.white,
-                  fontSize: 16,
-                  fontWeight: FontWeight.w700,
-                ),
+                style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.w700),
               ),
               SizedBox(height: 4),
               Text(
@@ -297,10 +169,7 @@ class _AtsCheckerScreenState extends ConsumerState<AtsCheckerScreen> {
           children: [
             Icon(Icons.lightbulb_outline, color: Colors.purple, size: 18),
             const SizedBox(width: 8),
-            const Text(
-              'What is ATS?',
-              style: TextStyle(fontWeight: FontWeight.w600, fontSize: 14),
-            ),
+            const Text('What is ATS?', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 14)),
           ],
         ),
         const SizedBox(height: 8),
@@ -308,174 +177,114 @@ class _AtsCheckerScreenState extends ConsumerState<AtsCheckerScreen> {
           'ATS (Applicant Tracking System) is software recruiters use to automatically filter resumes. '
           '75% of resumes are rejected by ATS before a human ever reads them. '
           'Our checker evaluates your resume\'s formatting, keywords, and structure.',
-          style: TextStyle(
-            fontSize: 13,
-            color: AppTheme.textSecondary,
-            height: 1.5,
-          ),
+          style: TextStyle(fontSize: 13, color: AppTheme.textSecondary, height: 1.5),
         ),
       ],
     ),
   );
 
-  Widget _buildChecklist() => Column(
-    crossAxisAlignment: CrossAxisAlignment.start,
-    children: [
-      const Text(
-        'What we check',
-        style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600),
-      ),
-      const SizedBox(height: 12),
-      ...const [
-        (
-          'Formatting & Structure',
-          'Clean sections, no complex tables/graphics',
-          Icons.format_align_left,
-        ),
-        (
-          'Keywords & Action Verbs',
-          'Industry-standard terminology',
-          Icons.key_outlined,
-        ),
-        (
-          'Contact Information',
-          'Complete and properly placed',
-          Icons.contact_page_outlined,
-        ),
-        (
-          'Quantifiable Achievements',
-          'Numbers and impact metrics',
-          Icons.trending_up,
-        ),
-        (
-          'Section Headers',
-          'Standard ATS-readable headers',
-          Icons.view_headline,
-        ),
-        (
-          'Length & Consistency',
-          'Appropriate length, uniform formatting',
-          Icons.straighten,
-        ),
-      ].map(
-        (item) =>
-            _ChecklistItem(title: item.$1, subtitle: item.$2, icon: item.$3),
-      ),
-    ],
-  );
-
-  Widget _buildFileDropZone() => GestureDetector(
-    onTap: _pickFile,
-    child: DottedBorder(
-      borderType: BorderType.RRect,
-      radius: const Radius.circular(12),
-      color: Colors.purple.withOpacity(0.4),
-      strokeWidth: 1.5,
-      dashPattern: const [8, 4],
-      child: Container(
+  /// The real, computed, free Instant Health Scan. Runs the exact same
+  /// LocalResumeAnalyzer used everywhere else resume text shows up, so this
+  /// number never disagrees with itself across screens.
+  Widget _buildInstantScanSection(String scanText) {
+    if (scanText.trim().length < 30) {
+      return Container(
         width: double.infinity,
-        padding: const EdgeInsets.all(28),
+        padding: const EdgeInsets.all(18),
         decoration: BoxDecoration(
-          color: Colors.purple.withOpacity(0.03),
-          borderRadius: BorderRadius.circular(12),
+          color: Colors.purple.withOpacity(0.04),
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(color: Colors.purple.withOpacity(0.15)),
         ),
         child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Icon(
-              Icons.upload_file_outlined,
-              size: 36,
-              color: Colors.purple.withOpacity(0.7),
+            Row(
+              children: [
+                const Icon(Icons.bolt_outlined, color: Colors.purple, size: 18),
+                const SizedBox(width: 8),
+                const Text('Instant Health Scan', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 14)),
+                const SizedBox(width: 8),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+                  decoration: BoxDecoration(
+                    color: AppTheme.success.withOpacity(0.12),
+                    borderRadius: BorderRadius.circular(6),
+                  ),
+                  child: const Text(
+                    'FREE',
+                    style: TextStyle(fontSize: 9.5, fontWeight: FontWeight.w800, color: AppTheme.success),
+                  ),
+                ),
+              ],
             ),
-            const SizedBox(height: 10),
-            const Text(
-              'Tap to select resume',
-              style: TextStyle(fontWeight: FontWeight.w600, fontSize: 15),
-            ),
-            const SizedBox(height: 4),
+            const SizedBox(height: 8),
             Text(
-              'PDF, JPG, or PNG',
-              style: TextStyle(fontSize: 12, color: AppTheme.textSecondary),
+              '13 real checks — contact info, section headers, action verbs, quantified impact, '
+              'parseability, and more — computed instantly on your device the moment you add a resume '
+              'below. No AI call, no waiting, unlimited use.',
+              style: TextStyle(fontSize: 12.5, color: AppTheme.textSecondary, height: 1.5),
             ),
           ],
         ),
+      );
+    }
+
+    final result = LocalResumeAnalyzer.analyze(scanText);
+    return LocalScanReport(result: result);
+  }
+
+  Widget _buildJdMatchCta() => InkWell(
+    borderRadius: BorderRadius.circular(14),
+    onTap: () => context.push(AppRoutes.jdKeywordMatch),
+    child: Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          colors: [AppTheme.primary, AppTheme.primaryDark],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        borderRadius: BorderRadius.circular(14),
+      ),
+      child: Row(
+        children: [
+          Container(
+            width: 42,
+            height: 42,
+            decoration: BoxDecoration(
+              color: Colors.white.withOpacity(0.18),
+              borderRadius: BorderRadius.circular(11),
+            ),
+            child: const Icon(Icons.manage_search, color: Colors.white, size: 22),
+          ),
+          const SizedBox(width: 12),
+          const Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Have a specific job in mind?',
+                  style: TextStyle(color: Colors.white, fontWeight: FontWeight.w700, fontSize: 13),
+                ),
+                SizedBox(height: 2),
+                Text(
+                  'Paste any job description — free instant keyword match, no AI needed',
+                  style: TextStyle(color: Colors.white70, fontSize: 11.5),
+                ),
+              ],
+            ),
+          ),
+          const Icon(Icons.arrow_forward_ios, color: Colors.white70, size: 14),
+        ],
       ),
     ),
   );
 
-  Widget _buildFilePreview(dynamic uploadState) => Container(
-    margin: const EdgeInsets.only(top: 12),
-    padding: const EdgeInsets.all(14),
-    decoration: BoxDecoration(
-      color: Colors.purple.withOpacity(0.05),
-      borderRadius: BorderRadius.circular(10),
-      border: Border.all(color: Colors.purple.withOpacity(0.2)),
-    ),
-    child: Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Row(
-          children: [
-            Icon(
-              _fileType == 'pdf' ? Icons.picture_as_pdf : Icons.image_outlined,
-              color: Colors.purple,
-              size: 20,
-            ),
-            const SizedBox(width: 8),
-            Expanded(
-              child: Text(
-                _selectedFileName ??
-                    _selectedFile?.path.split('/').last ??
-                    'resume',
-                style: const TextStyle(
-                  fontWeight: FontWeight.w500,
-                  fontSize: 13,
-                ),
-                overflow: TextOverflow.ellipsis,
-              ),
-            ),
-            GestureDetector(
-              onTap: () {
-                setState(() {
-                  _selectedFile = null;
-                  _selectedBytes = null;
-                  _selectedFileName = null;
-                  _fileType = null;
-                });
-                ref.read(resumeUploadProvider.notifier).reset();
-              },
-              child: Icon(Icons.close, size: 18, color: AppTheme.textSecondary),
-            ),
-          ],
-        ),
-        if (uploadState.isExtracting) ...[
-          const SizedBox(height: 8),
-          const LinearProgressIndicator(color: Colors.purple),
-          const SizedBox(height: 4),
-          Text(
-            'Reading resume...',
-            style: TextStyle(fontSize: 12, color: AppTheme.textSecondary),
-          ),
-        ] else if (uploadState.extractedText != null) ...[
-          const SizedBox(height: 8),
-          Row(
-            children: [
-              const Icon(Icons.check_circle, size: 14, color: Colors.purple),
-              const SizedBox(width: 4),
-              Text(
-                'Ready — ${uploadState.extractedText!.split(' ').length} words detected',
-                style: const TextStyle(fontSize: 12, color: Colors.purple),
-              ),
-            ],
-          ),
-        ],
-      ],
-    ),
-  );
-
-  Widget _buildRunButton(dynamic uploadState) {
-    final hasContext = ref.read(resumeContextProvider).hasResume;
-    final hasFile = _selectedFile != null || _selectedBytes != null;
-    final canRun = (hasFile || hasContext) && !uploadState.isLoading;
+  Widget _buildRunButton(ResumeUploadState uploadState, ResumeContext ctx) {
+    final hasFile = _currentInput != null;
+    final canRun = (hasFile || ctx.hasResume) && !uploadState.isLoading;
 
     return SizedBox(
       width: double.infinity,
@@ -490,22 +299,19 @@ class _AtsCheckerScreenState extends ConsumerState<AtsCheckerScreen> {
             ? const SizedBox(
                 height: 18,
                 width: 18,
-                child: CircularProgressIndicator(
-                  color: Colors.white,
-                  strokeWidth: 2,
-                ),
+                child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2),
               )
-            : const Icon(Icons.fact_check_outlined),
+            : const Icon(Icons.psychology_alt_outlined),
         label: Text(
           uploadState.isExtracting
               ? 'Reading resume...'
               : uploadState.isUploading
-              ? 'Uploading...'
-              : uploadState.isAnalyzing
-              ? 'Running ATS check...'
-              : hasContext && !hasFile
-              ? 'Re-run ATS Check on Your Resume'
-              : 'Run ATS Check',
+                  ? 'Uploading...'
+                  : uploadState.isAnalyzing
+                      ? 'Running deep AI check...'
+                      : ctx.hasResume && !hasFile
+                          ? 'Run Deep AI Check on Your Resume'
+                          : 'Run Deep AI Check',
           style: const TextStyle(fontWeight: FontWeight.w700),
         ),
       ),
@@ -520,57 +326,5 @@ class _AtsCheckerScreenState extends ConsumerState<AtsCheckerScreen> {
       borderRadius: BorderRadius.circular(8),
     ),
     child: Text(error, style: TextStyle(color: AppTheme.error, fontSize: 13)),
-  );
-}
-
-class _ChecklistItem extends StatelessWidget {
-  final String title, subtitle;
-  final IconData icon;
-  const _ChecklistItem({
-    required this.title,
-    required this.subtitle,
-    required this.icon,
-  });
-
-  @override
-  Widget build(BuildContext context) => Padding(
-    padding: const EdgeInsets.only(bottom: 10),
-    child: Row(
-      children: [
-        Container(
-          width: 36,
-          height: 36,
-          decoration: BoxDecoration(
-            color: Colors.purple.withOpacity(0.08),
-            borderRadius: BorderRadius.circular(8),
-          ),
-          child: Icon(icon, color: Colors.purple, size: 18),
-        ),
-        const SizedBox(width: 12),
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                title,
-                style: const TextStyle(
-                  fontWeight: FontWeight.w500,
-                  fontSize: 13,
-                ),
-              ),
-              Text(
-                subtitle,
-                style: TextStyle(fontSize: 11, color: AppTheme.textSecondary),
-              ),
-            ],
-          ),
-        ),
-        Icon(
-          Icons.check_circle_outline,
-          color: Colors.purple.withOpacity(0.4),
-          size: 18,
-        ),
-      ],
-    ),
   );
 }

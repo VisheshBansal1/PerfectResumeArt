@@ -9,6 +9,15 @@ class UserModel {
   final String? photoUrl;
   final DateTime createdAt;
 
+  // ─── Referral Program (Phase 1: codes/linking live; wallet fields sit at
+  // zero until Phase 2 wires commission crediting into the payment flow) ───
+  final String? referralCode; // this user's own shareable code (permanent once set)
+  final String? referredBy; // uid of whoever referred this user (permanent once set)
+  final double walletBalance; // pending + withdrawable, combined
+  final double pendingBalance; // portion of walletBalance still in the commission hold window
+  final double lifetimeEarnings; // net commissions earned (refund reversals subtracted)
+  final int totalReferrals; // number of accounts created using this user's code
+
   const UserModel({
     required this.uid,
     required this.email,
@@ -16,6 +25,12 @@ class UserModel {
     required this.role,
     this.photoUrl,
     required this.createdAt,
+    this.referralCode,
+    this.referredBy,
+    this.walletBalance = 0,
+    this.pendingBalance = 0,
+    this.lifetimeEarnings = 0,
+    this.totalReferrals = 0,
   });
 
   factory UserModel.fromMap(Map<String, dynamic> map, String uid) => UserModel(
@@ -27,7 +42,15 @@ class UserModel {
     // FIX: handle both Firestore Timestamp AND plain DateTime
     // (Google sign-in can store DateTime directly; email sign-in stores Timestamp)
     createdAt: _toDateTime(map['createdAt']),
+    referralCode: map['referralCode'] as String?,
+    referredBy: map['referredBy'] as String?,
+    walletBalance: _toDouble(map['walletBalance']),
+    pendingBalance: _toDouble(map['pendingBalance']),
+    lifetimeEarnings: _toDouble(map['lifetimeEarnings']),
+    totalReferrals: map['totalReferrals'] as int? ?? 0,
   );
+
+  static double _toDouble(dynamic value) => (value as num?)?.toDouble() ?? 0;
 
   static DateTime _toDateTime(dynamic value) {
     if (value == null) return DateTime.now();
@@ -37,6 +60,10 @@ class UserModel {
     return DateTime.now();
   }
 
+  // Money available to actually request a withdrawal for right now.
+  double get withdrawableBalance =>
+      (walletBalance - pendingBalance).clamp(0, double.infinity);
+
   Map<String, dynamic> toMap() => {
     'email': email,
     'name': name,
@@ -45,17 +72,38 @@ class UserModel {
     // FIX: always store as Firestore Timestamp (not raw DateTime)
     // so reads are always consistent
     'createdAt': Timestamp.fromDate(createdAt),
+    'referralCode': referralCode,
+    'referredBy': referredBy,
+    'walletBalance': walletBalance,
+    'pendingBalance': pendingBalance,
+    'lifetimeEarnings': lifetimeEarnings,
+    'totalReferrals': totalReferrals,
   };
 
-  UserModel copyWith({String? name, String? role, String? photoUrl}) =>
-      UserModel(
-        uid: uid,
-        email: email,
-        name: name ?? this.name,
-        role: role ?? this.role,
-        photoUrl: photoUrl ?? this.photoUrl,
-        createdAt: createdAt,
-      );
+  UserModel copyWith({
+    String? name,
+    String? role,
+    String? photoUrl,
+    String? referralCode,
+    String? referredBy,
+    double? walletBalance,
+    double? pendingBalance,
+    double? lifetimeEarnings,
+    int? totalReferrals,
+  }) => UserModel(
+    uid: uid,
+    email: email,
+    name: name ?? this.name,
+    role: role ?? this.role,
+    photoUrl: photoUrl ?? this.photoUrl,
+    createdAt: createdAt,
+    referralCode: referralCode ?? this.referralCode,
+    referredBy: referredBy ?? this.referredBy,
+    walletBalance: walletBalance ?? this.walletBalance,
+    pendingBalance: pendingBalance ?? this.pendingBalance,
+    lifetimeEarnings: lifetimeEarnings ?? this.lifetimeEarnings,
+    totalReferrals: totalReferrals ?? this.totalReferrals,
+  );
 }
 
 // ─── Job Model ────────────────────────────────────────────────────────────────

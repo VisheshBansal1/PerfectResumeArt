@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -5,6 +7,7 @@ import 'package:next_hire/features/auth/widgets/auth_widget.dart';
 
 import '../../../core/constants/app_theme.dart';
 import '../../../core/router/app_router.dart';
+import '../../../core/services/referral_service.dart';
 import '../providers/auth_provider.dart';
 
 class RegisterScreen extends ConsumerStatefulWidget {
@@ -19,14 +22,82 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
   final _nameCtrl = TextEditingController();
   final _emailCtrl = TextEditingController();
   final _passwordCtrl = TextEditingController();
+  final _referralCtrl = TextEditingController();
   bool _obscure = true;
+
+  // ── Referral Program ────────────────────────────────────────────────────
+  bool _referralFromLink = false; // pre-filled from a ?ref= link vs typed in
+  bool _referralChecking = false;
+  ReferralValidation? _referralResult;
+  Timer? _referralDebounce;
+
+  @override
+  void initState() {
+    super.initState();
+    _prefillReferralFromLink();
+  }
+
+  Future<void> _prefillReferralFromLink() async {
+    final code = await ReferralService().getPendingReferralCode();
+    if (code == null || !mounted) return;
+    setState(() {
+      _referralCtrl.text = code;
+      _referralFromLink = true;
+    });
+    _checkReferralCode(code);
+  }
+
+  void _onReferralChanged(String value) {
+    // Typing manually overrides the "came from a link" badge.
+    if (_referralFromLink) setState(() => _referralFromLink = false);
+    _referralDebounce?.cancel();
+    _referralResult = null;
+    if (value.trim().isEmpty) {
+      setState(() {});
+      return;
+    }
+    _referralDebounce = Timer(const Duration(milliseconds: 500), () {
+      _checkReferralCode(value.trim());
+    });
+  }
+
+  Future<void> _checkReferralCode(String code) async {
+    if (code.isEmpty) return;
+    setState(() => _referralChecking = true);
+    final result = await ReferralService().validateCode(code);
+    if (!mounted) return;
+    setState(() {
+      _referralChecking = false;
+      _referralResult = result;
+    });
+  }
 
   @override
   void dispose() {
     _nameCtrl.dispose();
     _emailCtrl.dispose();
     _passwordCtrl.dispose();
+    _referralCtrl.dispose();
+    _referralDebounce?.cancel();
     super.dispose();
+  }
+
+  // Shows a clear, explicit result — never silent about whether a referral
+  // code actually attached. Called right before navigating away.
+  void _showReferralFeedback() {
+    final result = ref.read(authNotifierProvider).referralAttachResult;
+    if (result == null || !mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        backgroundColor: result == 'attached' ? AppTheme.success : AppTheme.error,
+        content: Text(
+          result == 'attached'
+              ? '🎉 Referral code applied — you\u2019re all set!'
+              : 'Couldn\u2019t apply that referral code. You can try again from your Profile.',
+        ),
+        duration: const Duration(seconds: 4),
+      ),
+    );
   }
 
   Future<void> _register() async {
@@ -37,15 +108,26 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
           email: _emailCtrl.text.trim(),
           password: _passwordCtrl.text,
           name: _nameCtrl.text.trim(),
+          referralCode: _referralCtrl.text.trim().isEmpty
+              ? null
+              : _referralCtrl.text.trim(),
         );
-    if (user != null && mounted) context.go(AppRoutes.home);
+    if (user == null || !mounted) return;
+    _showReferralFeedback();
+    context.go(AppRoutes.home);
   }
 
   Future<void> _googleSignIn() async {
     final user = await ref
         .read(authNotifierProvider.notifier)
-        .signInWithGoogle();
-    if (user != null && mounted) context.go(AppRoutes.home);
+        .signInWithGoogle(
+          explicitReferralCode: _referralCtrl.text.trim().isEmpty
+              ? null
+              : _referralCtrl.text.trim(),
+        );
+    if (user == null || !mounted) return;
+    _showReferralFeedback();
+    context.go(AppRoutes.home);
   }
 
   @override
@@ -137,6 +219,45 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
                         ? 'Minimum 6 characters'
                         : null,
                   ),
+                  const SizedBox(height: 14),
+                  TextFormField(
+                    controller: _referralCtrl,
+                    textCapitalization: TextCapitalization.characters,
+                    onChanged: _onReferralChanged,
+                    decoration: InputDecoration(
+                      labelText: 'Referral code (optional)',
+                      prefixIcon: const Icon(Icons.card_giftcard_outlined),
+                      suffixIcon: _referralChecking
+                          ? const Padding(
+                              padding: EdgeInsets.all(14),
+                              child: SizedBox(
+                                height: 16,
+                                width: 16,
+                                child: CircularProgressIndicator(strokeWidth: 2),
+                              ),
+                            )
+                          : (_referralResult?.valid == true
+                                ? const Icon(Icons.check_circle, color: Colors.green)
+                                : null),
+                      helperText: _referralFromLink
+                          ? 'Applied from your invite link'
+                          : 'Have a friend\'s code? Enter it for a launch discount.',
+                      errorText: (_referralResult != null && !_referralResult!.valid)
+                          ? _referralResult!.error
+                          : null,
+                    ),
+                  ),
+                  if (_referralResult?.valid == true) ...[
+                    const SizedBox(height: 6),
+                    Text(
+                      'Referred by ${_referralResult!.referrerName}',
+                      style: const TextStyle(
+                        color: Colors.green,
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ],
                 ],
               ),
             ),

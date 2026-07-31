@@ -194,7 +194,7 @@ class _FeedbackSheetState extends State<_FeedbackSheet> {
       ),
       const Text(
         '💬  Share Your Thoughts',
-        style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700),
+        style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700, color: Colors.black),
       ),
       const SizedBox(height: 4),
       Text(
@@ -206,7 +206,7 @@ class _FeedbackSheetState extends State<_FeedbackSheet> {
       // Star rating
       const Text(
         'How would you rate the app?',
-        style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
+        style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600,color: Colors.black),
       ),
       const SizedBox(height: 10),
       Row(
@@ -235,7 +235,7 @@ class _FeedbackSheetState extends State<_FeedbackSheet> {
       // Message
       const Text(
         'What would you improve?',
-        style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
+        style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: Colors.black),
       ),
       const SizedBox(height: 8),
       TextField(

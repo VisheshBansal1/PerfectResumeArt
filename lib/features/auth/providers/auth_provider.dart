@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 
 import '../../../core/services/firebase_service.dart';
+import '../../../core/services/referral_service.dart';
 import '../../../models/models.dart';
 
 // ─── Firebase service ─────────────────────────────────────────────────────────
@@ -37,7 +38,39 @@ final currentUserProvider = FutureProvider<UserModel?>((ref) async {
 
   // Try to load existing Firestore profile.
   final service = ref.read(firebaseServiceProvider);
-  return service.getUser(firebaseUser.uid);
+  var user = await service.getUser(firebaseUser.uid);
+  if (user == null) return null;
+
+  // Referral Program: retry any attach that failed the first time around.
+  // The one case this actually fires for: Google's popup sign-in resolves
+  // FirebaseAuth's current-user state slightly slower than email/password
+  // signup does, so the very first attach attempt (right after account
+  // creation) could momentarily have no token to work with and fail. That
+  // failure no longer discards the pending code (see referral_service.dart),
+  // so it's still sitting in local storage — try it again here, now that
+  // auth state is unquestionably settled. No-ops harmlessly (no network
+  // call at all) if there's nothing pending or this account is already
+  // linked to a referrer.
+  if (user.referredBy == null) {
+    final attached = await ReferralService().attachAfterSignup();
+    if (attached) {
+      user = await service.getUser(firebaseUser.uid) ?? user;
+    }
+  }
+
+  // Referral Program: every user gets a permanent shareable code. Generated
+  // lazily here so it covers both brand-new signups and every account that
+  // existed before this feature shipped — no separate migration needed.
+  if (user.referralCode == null || user.referralCode!.isEmpty) {
+    final code = await ReferralService().ensureReferralCode(
+      uid: user.uid,
+      name: user.name,
+      existingCode: user.referralCode,
+    );
+    return user.copyWith(referralCode: code);
+  }
+
+  return user;
 });
 
 // ─── Auth State ───────────────────────────────────────────────────────────────
@@ -46,12 +79,16 @@ class AuthState {
   final bool isGoogleLoading;
   final String? error;
   final UserModel? user;
+  // 'attached' | 'failed' | null (null = no referral code was involved at
+  // all in this sign-in — the normal case, nothing to report).
+  final String? referralAttachResult;
 
   const AuthState({
     this.isLoading = false,
     this.isGoogleLoading = false,
     this.error,
     this.user,
+    this.referralAttachResult,
   });
 
   AuthState copyWith({
@@ -59,11 +96,13 @@ class AuthState {
     bool? isGoogleLoading,
     String? error,
     UserModel? user,
+    String? referralAttachResult,
   }) => AuthState(
     isLoading: isLoading ?? this.isLoading,
     isGoogleLoading: isGoogleLoading ?? this.isGoogleLoading,
     error: error, // explicit null clears previous error
     user: user ?? this.user,
+    referralAttachResult: referralAttachResult, // explicit null clears previous result, same pattern as error
   );
 }
 
@@ -91,6 +130,7 @@ class AuthNotifier extends StateNotifier<AuthState> {
     required String email,
     required String password,
     required String name,
+    String? referralCode,
   }) async {
     state = state.copyWith(isLoading: true, error: null);
     try {
@@ -108,7 +148,28 @@ class AuthNotifier extends StateNotifier<AuthState> {
         createdAt: DateTime.now(),
       );
       await _service.createUser(user);
-      state = state.copyWith(isLoading: false, user: user);
+
+      // Best-effort — never blocks account creation if this fails. Uses
+      // cred.user's own token directly (same pattern as Google sign-in)
+      // rather than depending on FirebaseAuth's global current-user state.
+      String? freshToken;
+      try {
+        freshToken = await cred.user!.getIdToken();
+      } catch (e) {
+        debugPrint('[Auth] Could not get token for referral attach: $e');
+      }
+
+      String? attachResult;
+      final codeInvolved = referralCode != null && referralCode.trim().isNotEmpty;
+      if (codeInvolved) {
+        final attached = await ReferralService().attachAfterSignup(
+          explicitCode: referralCode,
+          explicitToken: freshToken,
+        );
+        attachResult = attached ? 'attached' : 'failed';
+      }
+
+      state = state.copyWith(isLoading: false, user: user, referralAttachResult: attachResult);
       return user;
     } on FirebaseAuthException catch (e) {
       state = state.copyWith(isLoading: false, error: _authError(e.code));
@@ -137,7 +198,7 @@ class AuthNotifier extends StateNotifier<AuthState> {
   }
 
   // ── Google Sign-In ────────────────────────────────────────────────────────
-  Future<UserModel?> signInWithGoogle() async {
+  Future<UserModel?> signInWithGoogle({String? explicitReferralCode}) async {
     state = state.copyWith(isGoogleLoading: true, error: null);
 
     try {
@@ -156,6 +217,7 @@ class AuthNotifier extends StateNotifier<AuthState> {
       }
 
       UserModel? user = await _service.getUser(fbUser.uid);
+      String? referralResult;
 
       if (user == null) {
         user = UserModel(
@@ -168,9 +230,34 @@ class AuthNotifier extends StateNotifier<AuthState> {
         );
 
         await _service.createUser(user);
+
+        // FIX: get the token directly from fbUser — it's the concrete,
+        // already-resolved User object this sign-in call just returned, so
+        // there's no dependency on FirebaseAuth.instance's global current-
+        // user state (or any stream) having caught up yet. Only for
+        // brand-new accounts — never re-attaches on a returning user's
+        // later logins.
+        String? freshToken;
+        try {
+          freshToken = await fbUser.getIdToken();
+        } catch (e) {
+          debugPrint('[Auth] Could not get fbUser token for referral attach: $e');
+        }
+
+        final hasExplicitCode = explicitReferralCode != null && explicitReferralCode.trim().isNotEmpty;
+        final pendingCode = hasExplicitCode ? null : await ReferralService().getPendingReferralCode();
+        final codeInvolved = hasExplicitCode || (pendingCode != null && pendingCode.isNotEmpty);
+
+        if (codeInvolved) {
+          final attached = await ReferralService().attachAfterSignup(
+            explicitCode: explicitReferralCode,
+            explicitToken: freshToken,
+          );
+          referralResult = attached ? 'attached' : 'failed';
+        }
       }
 
-      state = state.copyWith(isGoogleLoading: false, user: user);
+      state = state.copyWith(isGoogleLoading: false, user: user, referralAttachResult: referralResult);
 
       return user;
     } catch (e, stackTrace) {

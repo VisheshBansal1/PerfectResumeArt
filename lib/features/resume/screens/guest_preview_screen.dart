@@ -1,27 +1,33 @@
 // lib/features/resume/screens/guest_preview_screen.dart
 //
-// COMPLETE REWRITE — now uses real PDF/image upload + real AI analysis
-// (same OCR pipeline as main app, direct backend call, no Firebase save)
+// Uses real PDF/image upload + the SAME canonical AI ATS analysis as the
+// main ATS Checker screen (AiService.analyzeAtsOnly) — guests and signed-in
+// users now always see the same score for the same resume. No Firebase
+// save (guests aren't authenticated).
 //
 // Dependencies already in your pubspec: file_picker, dotted_border, http
-// Providers used: ocrServiceProvider (no Firebase auth needed)
+// NEW dependency for drag-and-drop: add to pubspec.yaml
+//   desktop_drop: ^0.4.4
+// then run `flutter pub get`. (cross_file comes with it automatically.)
+// Providers used: aiServiceProvider, ocrServiceProvider (no Firebase auth needed)
 
-import 'dart:convert';
 import 'dart:io';
 import 'dart:typed_data';
 
+import 'package:cross_file/cross_file.dart';
+import 'package:desktop_drop/desktop_drop.dart';
 import 'package:dotted_border/dotted_border.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import 'package:http/http.dart' as http;
 
 import '../../../core/constants/app_theme.dart';
 import '../../../core/router/app_router.dart';
-import '../../../core/services/app_config.dart';
+import '../../../core/services/ai_service.dart';
 import '../../../core/services/ocr_service.dart';
+import '../../../models/models.dart';
 import '../../../providers/providers.dart';
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -75,13 +81,10 @@ class _GuestPreviewScreenState extends ConsumerState<GuestPreviewScreen> {
   String _statusMessage = '';
   String? _errorMessage;
   _GuestResult? _result;
-
-  // Optional job input
-  final _jobCtrl = TextEditingController();
+  bool _dragHover = false;
 
   @override
   void dispose() {
-    _jobCtrl.dispose();
     super.dispose();
   }
 
@@ -110,19 +113,7 @@ class _GuestPreviewScreenState extends ConsumerState<GuestPreviewScreen> {
           _showSnack('Could not read file. Try again.');
           return;
         }
-        if (bytes.length > 10 * 1024 * 1024) {
-          _showSnack('File too large (max 10 MB).');
-          return;
-        }
-        setState(() {
-          _fileBytes = Uint8List.fromList(bytes);
-          _fileName = picked.name;
-          _fileExt = ext;
-          _file = null;
-          _extractedText = null;
-          _result = null;
-          _step = _Step.upload;
-        });
+        _applyPickedBytes(Uint8List.fromList(bytes), picked.name, ext);
       } else {
         if (picked.path == null) return;
         final file = File(picked.path!);
@@ -130,28 +121,71 @@ class _GuestPreviewScreenState extends ConsumerState<GuestPreviewScreen> {
           _showSnack('File not found. Try again.');
           return;
         }
-        final size = await file.length();
-        if (size == 0) {
-          _showSnack('File is empty.');
-          return;
-        }
-        if (size > 10 * 1024 * 1024) {
-          _showSnack('File too large (max 10 MB).');
-          return;
-        }
-        setState(() {
-          _file = file;
-          _fileName = picked.name;
-          _fileExt = ext;
-          _fileBytes = null;
-          _extractedText = null;
-          _result = null;
-          _step = _Step.upload;
-        });
+        await _applyPickedFile(file, picked.name, ext);
       }
     } catch (_) {
       _showSnack('Could not open file. Try a different file.');
     }
+  }
+
+  /// Handles a file dropped directly onto the drop zone (web). Goes through
+  /// the exact same validation and state-setting as browsing for a file, so
+  /// drag-and-drop can never behave differently from tap-to-browse.
+  Future<void> _handleDroppedFiles(List<XFile> files) async {
+    if (files.isEmpty) return;
+    final dropped = files.first;
+    final ext = dropped.name.split('.').last.toLowerCase();
+    if (!['pdf', 'jpg', 'jpeg', 'png'].contains(ext)) {
+      _showSnack('Only PDF, JPG, PNG supported.');
+      return;
+    }
+    try {
+      final bytes = await dropped.readAsBytes();
+      if (bytes.isEmpty) {
+        _showSnack('Could not read file. Try again.');
+        return;
+      }
+      _applyPickedBytes(bytes, dropped.name, ext);
+    } catch (_) {
+      _showSnack('Could not open file. Try a different file.');
+    }
+  }
+
+  void _applyPickedBytes(Uint8List bytes, String name, String ext) {
+    if (bytes.length > 10 * 1024 * 1024) {
+      _showSnack('File too large (max 10 MB).');
+      return;
+    }
+    setState(() {
+      _fileBytes = bytes;
+      _fileName = name;
+      _fileExt = ext;
+      _file = null;
+      _extractedText = null;
+      _result = null;
+      _step = _Step.upload;
+    });
+  }
+
+  Future<void> _applyPickedFile(File file, String name, String ext) async {
+    final size = await file.length();
+    if (size == 0) {
+      _showSnack('File is empty.');
+      return;
+    }
+    if (size > 10 * 1024 * 1024) {
+      _showSnack('File too large (max 10 MB).');
+      return;
+    }
+    setState(() {
+      _file = file;
+      _fileName = name;
+      _fileExt = ext;
+      _fileBytes = null;
+      _extractedText = null;
+      _result = null;
+      _step = _Step.upload;
+    });
   }
 
   bool get _hasFile => _file != null || _fileBytes != null;
@@ -212,8 +246,8 @@ class _GuestPreviewScreenState extends ConsumerState<GuestPreviewScreen> {
         _statusMessage = 'AI is analyzing your resume...';
       });
 
-      // Step 2: Call backend AI
-      final result = await _callGuestAnalysis(text, _jobCtrl.text.trim());
+      // Step 2: Run the canonical ATS analysis
+      final result = await _callGuestAnalysis(text);
 
       setState(() {
         _result = result;
@@ -228,153 +262,41 @@ class _GuestPreviewScreenState extends ConsumerState<GuestPreviewScreen> {
     }
   }
 
-  Future<_GuestResult> _callGuestAnalysis(
-    String resumeText,
-    String jobTitle,
-  ) async {
-    // Truncate resume — keeps prompt well under backend's 5 MB body limit
-    final safeText = resumeText.length > 8000
-        ? resumeText.substring(0, 8000)
-        : resumeText;
+  /// Runs the resume through the exact same canonical ATS analysis the main
+  /// ATS Checker screen uses (AiService.analyzeAtsOnly) — same prompt, same
+  /// model, same scoring rubric. This is what makes the guest score and the
+  /// signed-in score agree for the same resume, instead of drifting apart
+  /// like they did when this screen had its own separate prompt. No
+  /// Firestore save happens here since guests aren't authenticated — we
+  /// just read the fields off the returned AnalysisModel.
+  Future<_GuestResult> _callGuestAnalysis(String resumeText) async {
+    final aiService = ref.read(aiServiceProvider);
+    final model = await aiService.analyzeAtsOnly(
+      resumeText: resumeText,
+      userId: 'guest',
+      resumeId: 'guest-preview-${DateTime.now().millisecondsSinceEpoch}',
+    );
 
-    final jobLine = jobTitle.isNotEmpty
-        ? 'Target role: $jobTitle'
-        : 'No specific role — do a general ATS/readability analysis';
-
-    // ── Prompt ──────────────────────────────────────────────────────────────
-    // Kept intentionally short so the model has maximum tokens for its output.
-    // We ask for the JSON object to START immediately (no preamble).
-    final prompt =
-        '''
-You are an ATS resume expert. Analyze the resume and respond with ONLY a valid JSON object — no markdown, no explanation, no text before or after the JSON.
-
-$jobLine
-
-Resume:
-"""
-$safeText
-"""
-
-Respond with exactly this JSON (fill every field, keep string values concise):
-{"atsScore":0,"overallAssessment":"","quickFindings":["","",""],"criticalIssuesCount":0,"missingKeywords":["","","","",""],"strengthAreas":["","",""],"redFlags":["","",""]}
-
-Rules:
-- atsScore: 0-100 integer reflecting real ATS compatibility
-- overallAssessment: one sentence, max 10 words
-- quickFindings: 3 specific observations about THIS resume (reference actual content)
-- criticalIssuesCount: total issues found (visible + locked)
-- missingKeywords: 5 important missing keywords for the target role
-- strengthAreas: 3 genuine positives in this resume
-- redFlags: 3 issues that hurt ATS ranking
-Output the completed JSON object immediately, starting with {''';
-
-    // ── HTTP call ────────────────────────────────────────────────────────────
-    final response = await http
-        .post(
-          Uri.parse('${AppConfig.backendUrl}/api/ai/chat'),
-          headers: {'Content-Type': 'application/json'},
-          body: jsonEncode({
-            'prompt': prompt,
-            'model': 'llama-3.1-8b-instant',
-            'maxTokens': 1200, // was 800 — extra room prevents mid-JSON cutoff
-          }),
-        )
-        .timeout(const Duration(seconds: 40));
-
-    if (response.statusCode != 200) {
-      final errBody = jsonDecode(response.body);
-      final msg = errBody['error'] ?? 'HTTP ${response.statusCode}';
-      throw Exception('Analysis service error: $msg');
+    if (model.finalRecommendation == 'Not a Resume') {
+      throw Exception('This doesn\'t look like a resume. Please upload an actual resume/CV file.');
     }
 
-    // ── Parse response ───────────────────────────────────────────────────────
-    final body = jsonDecode(response.body);
-
-    // Backend may return { response: "..." } OR { content: "..." } OR { result: "..." }
-    final rawText =
-        (body['response'] ?? body['content'] ?? body['result'] ?? '')
-            .toString()
-            .trim();
-
-    if (rawText.isEmpty) {
-      throw Exception('Empty response from AI service. Please try again.');
-    }
-
-    // Extract the JSON object by brace matching — handles any preamble/postamble
-    // the model might add despite instructions.
-    final jsonStr = _extractJsonObject(rawText);
-    if (jsonStr == null) {
-      throw Exception(
-        'Could not read the AI response. Please try again.\n\n'
-        'Tip: if this keeps happening, try a shorter resume.',
-      );
-    }
-
-    Map<String, dynamic> parsed;
-    try {
-      parsed = jsonDecode(jsonStr) as Map<String, dynamic>;
-    } on FormatException {
-      throw Exception('Malformed analysis response. Please try again.');
-    }
+    final findings = <String>[
+      ...model.weaknesses.take(2),
+      if (model.strengths.isNotEmpty) model.strengths.first,
+    ].take(3).toList();
 
     return _GuestResult(
-      atsScore: ((parsed['atsScore'] as num?)?.toInt() ?? 50).clamp(0, 100),
-      overallAssessment:
-          parsed['overallAssessment'] as String? ?? 'Analysis complete',
-      quickFindings: _safeStringList(parsed['quickFindings']),
-      criticalIssuesCount:
-          (parsed['criticalIssuesCount'] as num?)?.toInt() ?? 0,
-      missingKeywords: _safeStringList(parsed['missingKeywords']),
-      strengthAreas: _safeStringList(parsed['strengthAreas']),
-      redFlags: _safeStringList(parsed['redFlags']),
+      atsScore: model.atsScore,
+      overallAssessment: model.finalRecommendation,
+      quickFindings: findings.isEmpty
+          ? ['Full breakdown ready — sign up to see everything we found.']
+          : findings,
+      criticalIssuesCount: model.weaknesses.length,
+      missingKeywords: model.missingSkills,
+      strengthAreas: model.strengths,
+      redFlags: model.weaknesses,
     );
-  }
-
-  /// Finds the first complete `{ ... }` block in [text] using brace counting.
-  /// Returns null if no valid JSON object is found.
-  String? _extractJsonObject(String text) {
-    final start = text.indexOf('{');
-    if (start == -1) return null;
-
-    int depth = 0;
-    bool inString = false;
-    bool escape = false;
-
-    for (int i = start; i < text.length; i++) {
-      final ch = text[i];
-
-      if (escape) {
-        escape = false;
-        continue;
-      }
-      if (ch == r'\' && inString) {
-        escape = true;
-        continue;
-      }
-      if (ch == '"') {
-        inString = !inString;
-        continue;
-      }
-      if (inString) continue;
-
-      if (ch == '{')
-        depth++;
-      else if (ch == '}') {
-        depth--;
-        if (depth == 0) {
-          // Found the closing brace — return the complete object
-          return text.substring(start, i + 1);
-        }
-      }
-    }
-    return null; // Truncated JSON — couldn't find matching }
-  }
-
-  /// Safely converts a dynamic list (or null) to List<String>.
-  List<String> _safeStringList(dynamic value) {
-    if (value == null) return [];
-    if (value is List) return value.map((e) => e.toString()).toList();
-    return [];
   }
 
   // ── Helpers ────────────────────────────────────────────────────────────────
@@ -486,40 +408,6 @@ Output the completed JSON object immediately, starting with {''';
         const SizedBox(height: 12),
         _hasFile ? _filePreviewTile() : _dropZone(),
 
-        // Step 2: Job title (optional)
-        const SizedBox(height: 24),
-        _stepHeader(
-          2,
-          'What job are you targeting?',
-          'Optional — improves accuracy',
-        ),
-        const SizedBox(height: 10),
-        TextField(
-          controller: _jobCtrl,
-          decoration: InputDecoration(
-            hintText:
-                'e.g. "Flutter Developer", "Data Analyst", "Backend Engineer"',
-            hintStyle: TextStyle(
-              color: AppTheme.textSecondary.withOpacity(0.55),
-              fontSize: 13,
-            ),
-            prefixIcon: const Icon(Icons.work_outline, size: 20),
-            border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
-            enabledBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(10),
-              borderSide: BorderSide(color: AppTheme.borderLight),
-            ),
-            focusedBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(10),
-              borderSide: BorderSide(color: AppTheme.primary),
-            ),
-            contentPadding: const EdgeInsets.symmetric(
-              horizontal: 14,
-              vertical: 13,
-            ),
-          ),
-        ),
-
         const SizedBox(height: 8),
         Row(
           children: [
@@ -627,51 +515,70 @@ Output the completed JSON object immediately, starting with {''';
     ],
   );
 
-  Widget _dropZone() => GestureDetector(
-    onTap: _pickFile,
-    child: DottedBorder(
-      borderType: BorderType.RRect,
-      radius: const Radius.circular(12),
-      color: AppTheme.primary.withOpacity(0.45),
-      strokeWidth: 1.5,
-      dashPattern: const [8, 4],
-      child: Container(
-        width: double.infinity,
-        padding: const EdgeInsets.symmetric(vertical: 32),
-        decoration: BoxDecoration(
-          color: AppTheme.primary.withOpacity(0.03),
-          borderRadius: BorderRadius.circular(12),
-        ),
-        child: Column(
-          children: [
-            Container(
-              width: 56,
-              height: 56,
-              decoration: BoxDecoration(
-                color: AppTheme.primary.withOpacity(0.1),
-                shape: BoxShape.circle,
+  Widget _dropZone() {
+    final zone = GestureDetector(
+      onTap: _pickFile,
+      child: DottedBorder(
+        borderType: BorderType.RRect,
+        radius: const Radius.circular(12),
+        color: _dragHover ? AppTheme.primary : AppTheme.primary.withOpacity(0.45),
+        strokeWidth: _dragHover ? 2.2 : 1.5,
+        dashPattern: const [8, 4],
+        child: Container(
+          width: double.infinity,
+          padding: const EdgeInsets.symmetric(vertical: 32),
+          decoration: BoxDecoration(
+            color: _dragHover ? AppTheme.primary.withOpacity(0.08) : AppTheme.primary.withOpacity(0.03),
+            borderRadius: BorderRadius.circular(12),
+          ),
+          child: Column(
+            children: [
+              Container(
+                width: 56,
+                height: 56,
+                decoration: BoxDecoration(
+                  color: AppTheme.primary.withOpacity(0.1),
+                  shape: BoxShape.circle,
+                ),
+                child: Icon(
+                  _dragHover ? Icons.file_download_outlined : Icons.upload_file_outlined,
+                  size: 28,
+                  color: AppTheme.primary,
+                ),
               ),
-              child: Icon(
-                Icons.upload_file_outlined,
-                size: 28,
-                color: AppTheme.primary,
+              const SizedBox(height: 12),
+              Text(
+                _dragHover
+                    ? 'Drop to upload'
+                    : kIsWeb
+                        ? 'Tap to browse, or drag a file here'
+                        : 'Tap to select your resume',
+                textAlign: TextAlign.center,
+                style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 15),
               ),
-            ),
-            const SizedBox(height: 12),
-            const Text(
-              'Tap to select your resume',
-              style: TextStyle(fontWeight: FontWeight.w600, fontSize: 15),
-            ),
-            const SizedBox(height: 4),
-            Text(
-              'PDF · JPG · PNG',
-              style: TextStyle(fontSize: 12, color: AppTheme.textSecondary),
-            ),
-          ],
+              const SizedBox(height: 4),
+              Text(
+                'PDF · JPG · PNG',
+                style: TextStyle(fontSize: 12, color: AppTheme.textSecondary),
+              ),
+            ],
+          ),
         ),
       ),
-    ),
-  );
+    );
+
+    if (!kIsWeb) return zone;
+
+    return DropTarget(
+      onDragEntered: (_) => setState(() => _dragHover = true),
+      onDragExited: (_) => setState(() => _dragHover = false),
+      onDragDone: (details) async {
+        setState(() => _dragHover = false);
+        await _handleDroppedFiles(details.files);
+      },
+      child: zone,
+    );
+  }
 
   Widget _filePreviewTile() => Container(
     padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),

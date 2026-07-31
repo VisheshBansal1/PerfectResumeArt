@@ -12,6 +12,7 @@ import 'package:next_hire/features/auth/widgets/auth_widget.dart';
 
 import '../../../core/constants/app_theme.dart';
 import '../../../core/router/app_router.dart';
+import '../../../core/services/referral_service.dart';
 import '../../../features/resume/screens/guest_preview_screen.dart'; // ← NEW
 import '../providers/auth_provider.dart';
 
@@ -26,12 +27,33 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   final _formKey = GlobalKey<FormState>();
   final _emailCtrl = TextEditingController();
   final _passwordCtrl = TextEditingController();
+  final _referralCtrl = TextEditingController();
   bool _obscure = true;
+  // Always available regardless of link/no-link — starts expanded and
+  // pre-filled only if a code was actually detected; otherwise collapsed,
+  // but the user can still open it and type one in themselves.
+  bool _referralExpanded = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _checkPendingReferral();
+  }
+
+  Future<void> _checkPendingReferral() async {
+    final code = await ReferralService().getPendingReferralCode();
+    if (code == null || !mounted) return;
+    setState(() {
+      _referralCtrl.text = code;
+      _referralExpanded = true;
+    });
+  }
 
   @override
   void dispose() {
     _emailCtrl.dispose();
     _passwordCtrl.dispose();
+    _referralCtrl.dispose();
     super.dispose();
   }
 
@@ -41,6 +63,24 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     } else {
       context.go(AppRoutes.home);
     }
+  }
+
+  // Shows a clear, explicit result — never silent about whether a referral
+  // code actually attached. Called right before navigating away.
+  void _showReferralFeedback() {
+    final result = ref.read(authNotifierProvider).referralAttachResult;
+    if (result == null || !mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        backgroundColor: result == 'attached' ? AppTheme.success : AppTheme.error,
+        content: Text(
+          result == 'attached'
+              ? '🎉 Referral code applied — you\u2019re all set!'
+              : 'Couldn\u2019t apply that referral code. You can try again from your Profile.',
+        ),
+        duration: const Duration(seconds: 4),
+      ),
+    );
   }
 
   Future<void> _login() async {
@@ -54,8 +94,14 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   Future<void> _googleSignIn() async {
     final user = await ref
         .read(authNotifierProvider.notifier)
-        .signInWithGoogle();
-    if (user != null && mounted) _navigate(user.role);
+        .signInWithGoogle(
+          explicitReferralCode: _referralCtrl.text.trim().isEmpty
+              ? null
+              : _referralCtrl.text.trim(),
+        );
+    if (user == null || !mounted) return;
+    _showReferralFeedback();
+    _navigate(user.role);
   }
 
   @override
@@ -72,6 +118,12 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
               const SizedBox(height: 48),
               _buildHeader(),
               const SizedBox(height: 32),
+
+              // ── Referral code — always available, whether the person
+              // came from a link or not. Auto-expanded and pre-filled if
+              // one was detected; otherwise collapsed but always reachable.
+              _buildReferralSection(),
+              const SizedBox(height: 16),
 
               // ── Google Sign-In (primary, fastest) ─────────────
               GoogleSignInButton(
@@ -122,6 +174,71 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
       ),
     );
   }
+
+  Widget _buildReferralSection() => Container(
+    decoration: BoxDecoration(
+      color: AppTheme.accent.withOpacity(0.06),
+      borderRadius: BorderRadius.circular(12),
+      border: Border.all(color: AppTheme.accent.withOpacity(0.25)),
+    ),
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        InkWell(
+          borderRadius: BorderRadius.circular(12),
+          onTap: () => setState(() => _referralExpanded = !_referralExpanded),
+          child: Padding(
+            padding: const EdgeInsets.all(14),
+            child: Row(
+              children: [
+                const Icon(Icons.card_giftcard_rounded, size: 16, color: AppTheme.accent),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    _referralCtrl.text.trim().isNotEmpty
+                        ? 'Referral code: ${_referralCtrl.text.trim()}'
+                        : 'Have a referral code?',
+                    style: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.w700, color: AppTheme.accent),
+                  ),
+                ),
+                Icon(
+                  _referralExpanded ? Icons.expand_less : Icons.expand_more,
+                  size: 18,
+                  color: AppTheme.accent,
+                ),
+              ],
+            ),
+          ),
+        ),
+        if (_referralExpanded)
+          Padding(
+            padding: const EdgeInsets.fromLTRB(14, 0, 14, 14),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                TextField(
+                  controller: _referralCtrl,
+                  textCapitalization: TextCapitalization.characters,
+                  style: const TextStyle(fontSize: 14),
+                  onChanged: (_) => setState(() {}), // keep the collapsed-header preview in sync
+                  decoration: const InputDecoration(
+                    isDense: true,
+                    hintText: 'Enter code (optional)',
+                    border: OutlineInputBorder(),
+                    contentPadding: EdgeInsets.symmetric(horizontal: 10, vertical: 10),
+                  ),
+                ),
+                const SizedBox(height: 6),
+                Text(
+                  'Applied automatically when you sign in with Google. Leave blank if you don\u2019t have one.',
+                  style: TextStyle(fontSize: 11, color: Colors.grey[600]),
+                ),
+              ],
+            ),
+          ),
+      ],
+    ),
+  );
 
   Widget _buildHeader() => Column(
     crossAxisAlignment: CrossAxisAlignment.start,

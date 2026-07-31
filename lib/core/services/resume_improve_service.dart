@@ -434,8 +434,13 @@ Return ONLY valid JSON:
 }
 ''';
 
-    final raw = await _call(prompt, maxTokens: 2500, model: _fastModel);
-    final data = _decode(raw);
+    final data = await _callAndProcessWithRetry(
+      prompt: prompt,
+      maxTokens: 4096,
+      model: _fastModel,
+      temperature: 0.35,
+      process: _decode,
+    );
     return ImprovedResume.fromMap(data, resumeText);
   }
 
@@ -471,8 +476,13 @@ Return ONLY valid JSON:
 }
 ''';
 
-    final raw = await _call(prompt, maxTokens: 2500, model: _fastModel);
-    final data = _decode(raw);
+    final data = await _callAndProcessWithRetry(
+      prompt: prompt,
+      maxTokens: 4096,
+      model: _fastModel,
+      temperature: 0.35,
+      process: _decode,
+    );
     return JdOptimizedResume.fromMap(data, resumeText);
   }
 
@@ -853,6 +863,16 @@ RULE 6 — ATS FORMATTING (critical):
   • Dates right-aligned is standard but in plain text just put "Month Year – Month Year"
   - Use "- " (plain ASCII hyphen-space) for every bullet point — no Unicode bullets, no asterisks
 
+RULE 7 — LANGUAGE DISCIPLINE (bullets that would fail these read as generic or amateur):
+  • NEVER use "I", "me", "my", or "myself" anywhere — every bullet is implied first person
+    ("Built X", never "I built X")
+  • NEVER use passive voice ("was responsible for", "was tasked with", "duties included") —
+    always active ("Owned X", "Drove X")
+  • NEVER use filler clichés: "hardworking", "team player", "detail-oriented", "self-motivated",
+    "go-getter", "results-driven", "dynamic professional", "think outside the box",
+    "passion for excellence", "fast learner" — replace every one with a specific, provable fact
+  • Vary sentence openers — do not start 3+ bullets in the same role with the same verb
+
 ═══════════════════════════════════════
 SECTION ORDER (mandatory):
 ═══════════════════════════════════════
@@ -996,8 +1016,13 @@ Return ONLY valid JSON — no markdown, no explanation, no preamble:
 }
 ''';
 
-    final raw = await _call(prompt, maxTokens: 3000, model: _fastModel);
-    final data = _decode(raw);
+    final data = await _callAndProcessWithRetry(
+      prompt: prompt,
+      maxTokens: 5500,
+      model: _fastModel,
+      temperature: 0.4,
+      process: _decode,
+    );
 
     // ── Post-process resumeText: normalise all bullet variants ───────────────
     // The model sometimes outputs ◆ ▪ ● ▶ or other Unicode bullets that
@@ -1079,6 +1104,7 @@ Return ONLY valid JSON — no markdown, no explanation, no preamble:
     String prompt, {
     required int maxTokens,
     String? model,
+    double? temperature,
   }) async {
     final backendUrl = AppConfig.backendUrl;
     if (backendUrl.isEmpty) {
@@ -1095,6 +1121,9 @@ Return ONLY valid JSON — no markdown, no explanation, no preamble:
             'prompt': prompt,
             'model': model ?? _model,
             'maxTokens': maxTokens,
+            // Best-effort: takes effect once the backend forwards this field
+            // to Groq. Harmless no-op otherwise.
+            if (temperature != null) 'temperature': temperature,
           }),
         )
         .timeout(
@@ -1115,6 +1144,30 @@ Return ONLY valid JSON — no markdown, no explanation, no preamble:
       throw Exception(data['error'] ?? 'AI service error');
     }
     return data['content'] as String? ?? '';
+  }
+
+  /// Calls the model and decodes+post-processes its response, retrying the
+  /// FULL round-trip (regenerate + re-decode) if [process] throws. Covers
+  /// truncated or malformed JSON the same way a fresh generation attempt
+  /// usually doesn't repeat — a one-off formatting slip, not a systematic one.
+  Future<T> _callAndProcessWithRetry<T>({
+    required String prompt,
+    required int maxTokens,
+    required T Function(String rawResponse) process,
+    String? model,
+    double? temperature,
+    int maxAttempts = 2,
+  }) async {
+    for (int attempt = 1; attempt <= maxAttempts; attempt++) {
+      final raw = await _call(prompt, maxTokens: maxTokens, model: model, temperature: temperature);
+      try {
+        return process(raw);
+      } catch (e) {
+        if (attempt >= maxAttempts) rethrow;
+        await Future.delayed(const Duration(milliseconds: 400));
+      }
+    }
+    throw Exception('AI request failed after retries. Please try again.');
   }
 
   Map<String, dynamic> _decode(String raw) {

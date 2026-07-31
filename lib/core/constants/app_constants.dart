@@ -9,6 +9,26 @@ class AppConstants {
   static const String analysisCollection = 'analysis';
   static const String adminDecisionsCollection = 'admin_decisions';
 
+  // Referral Program — Phase 1 (live now)
+  // Slim public-readable lookup: {code} -> {uid}. Kept separate from
+  // `users` so validating a code never requires broad read access to
+  // user documents.
+  static const String referralCodesCollection = 'referral_codes';
+  // Audit trail of referral actions (signup linked, purchase credited,
+  // refund reversed, etc.) — spec requires storing all referral events.
+  static const String referralEventsCollection = 'referral_events';
+
+  // Referral Program — Phase 2 (live on the backend now; not yet read
+  // directly by the Flutter client — see ReferralService for the
+  // /quote and /wallet endpoints that expose this data instead)
+  static const String purchasesCollection = 'purchases';
+  static const String referralTransactionsCollection = 'referral_transactions';
+  static const String campaignConfigCollection = 'config';
+  static const String campaignConfigDocId = 'referral_campaign';
+
+  // Referral Program — Phase 4 (withdrawals, not wired yet)
+  static const String withdrawalRequestsCollection = 'withdrawal_requests';
+
   // Storage Paths
   static const String resumeStoragePath = 'resumes';
 

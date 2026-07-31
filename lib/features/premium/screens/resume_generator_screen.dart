@@ -2294,6 +2294,28 @@ class _DownloadButton extends ConsumerWidget {
   final String name;
   const _DownloadButton({required this.name});
 
+  Future<void> _showTemplatePicker(BuildContext context, WidgetRef ref) async {
+    final resumeText = ref.read(resumeGeneratorProvider).result?.resumeText ?? '';
+    final suggested = ResumeTemplates.autoDetect(resumeText);
+    final chosenId = await showModalBottomSheet<String>(
+      context: context,
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (_) => _TemplatePickerSheet(suggestedId: suggested.id),
+    );
+    if (chosenId == null || !context.mounted) return;
+
+    await ref
+        .read(resumeGeneratorProvider.notifier)
+        .generatePdf(name: name, templateId: chosenId);
+    final path = ref.read(resumeGeneratorProvider).pdfPath;
+    if (path != null && context.mounted) {
+      ResumePdfService().sharePdf(path);
+    }
+  }
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final state = ref.watch(resumeGeneratorProvider);
@@ -2308,16 +2330,148 @@ class _DownloadButton extends ConsumerWidget {
           : IconButton(
               icon: const Icon(Icons.download_rounded),
               tooltip: 'Download PDF',
-              onPressed: () async {
-                await ref
-                    .read(resumeGeneratorProvider.notifier)
-                    .generatePdf(name: name);
-                final path = ref.read(resumeGeneratorProvider).pdfPath;
-                if (path != null && context.mounted) {
-                  ResumePdfService().sharePdf(path);
-                }
-              },
+              onPressed: () => _showTemplatePicker(context, ref),
             ),
+    );
+  }
+}
+
+// ─── Template Picker Sheet ─────────────────────────────────────────────────────
+
+class _TemplatePickerSheet extends StatefulWidget {
+  final String suggestedId;
+  const _TemplatePickerSheet({required this.suggestedId});
+
+  @override
+  State<_TemplatePickerSheet> createState() => _TemplatePickerSheetState();
+}
+
+class _TemplatePickerSheetState extends State<_TemplatePickerSheet> {
+  late String _selectedId = widget.suggestedId;
+
+  @override
+  Widget build(BuildContext context) {
+    return SafeArea(
+      child: Padding(
+        padding: EdgeInsets.only(
+          left: 20,
+          right: 20,
+          top: 16,
+          bottom: MediaQuery.of(context).viewInsets.bottom + 20,
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Center(
+              child: Container(
+                width: 40,
+                height: 4,
+                decoration: BoxDecoration(
+                  color: AppTheme.borderLight,
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+            ),
+            const SizedBox(height: 16),
+            const Text('Choose a Template', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700)),
+            const SizedBox(height: 4),
+            Text(
+              'We picked one based on your target role — pick a different one anytime.',
+              style: TextStyle(fontSize: 12, color: AppTheme.textSecondary),
+            ),
+            const SizedBox(height: 16),
+            ...ResumeTemplates.all.map((t) {
+              final selected = t.id == _selectedId;
+              final isSuggested = t.id == widget.suggestedId;
+              return GestureDetector(
+                onTap: () => setState(() => _selectedId = t.id),
+                child: Container(
+                  margin: const EdgeInsets.only(bottom: 10),
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: selected ? t.accentFlutterColor.withOpacity(0.06) : Colors.transparent,
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(
+                      color: selected ? t.accentFlutterColor : AppTheme.borderLight,
+                      width: selected ? 1.6 : 1,
+                    ),
+                  ),
+                  child: Row(
+                    children: [
+                      Container(
+                        width: 40,
+                        height: 40,
+                        decoration: BoxDecoration(
+                          color: t.accentFlutterColor,
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                        child: Icon(
+                          selected ? Icons.check : Icons.description_outlined,
+                          color: Colors.white,
+                          size: 18,
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Row(
+                              children: [
+                                Text(
+                                  t.name,
+                                  style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 13.5),
+                                ),
+                                if (isSuggested) ...[
+                                  const SizedBox(width: 6),
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                    decoration: BoxDecoration(
+                                      color: t.accentFlutterColor.withOpacity(0.12),
+                                      borderRadius: BorderRadius.circular(6),
+                                    ),
+                                    child: Text(
+                                      'Suggested',
+                                      style: TextStyle(
+                                        fontSize: 9,
+                                        fontWeight: FontWeight.w700,
+                                        color: t.accentFlutterColor,
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ],
+                            ),
+                            const SizedBox(height: 2),
+                            Text(
+                              t.description,
+                              style: TextStyle(fontSize: 11.5, color: AppTheme.textSecondary),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              );
+            }),
+            const SizedBox(height: 8),
+            SizedBox(
+              width: double.infinity,
+              child: ElevatedButton(
+                onPressed: () => Navigator.pop(context, _selectedId),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: AppTheme.primary,
+                  foregroundColor: Colors.white,
+                  padding: const EdgeInsets.symmetric(vertical: 13),
+                ),
+                child: const Text('Use This Template', style: TextStyle(fontWeight: FontWeight.w700)),
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 }
