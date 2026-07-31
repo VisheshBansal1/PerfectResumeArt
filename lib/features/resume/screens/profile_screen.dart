@@ -293,12 +293,20 @@ class ProfileScreen extends ConsumerWidget {
           ),
           title: const Text(
             'Analysis History',
-            style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500, color: Colors.black),
+            style: TextStyle(
+              fontSize: 14,
+              fontWeight: FontWeight.w500,
+              color: Colors.black,
+            ),
           ),
-          subtitle: const Text('View all past analyses', style: TextStyle(color: Colors.black87),),
+          subtitle: const Text(
+            'View all past analyses',
+            style: TextStyle(color: Colors.black87),
+          ),
           trailing: const Icon(Icons.chevron_right),
           onTap: () => context.pop(),
         ),
+
         const SizedBox(height: 8),
         ListTile(
           shape: RoundedRectangleBorder(
@@ -320,11 +328,41 @@ class ProfileScreen extends ConsumerWidget {
           ),
           title: const Text(
             'Contact Us',
-            style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500, color: Colors.black),
+            style: TextStyle(
+              fontSize: 14,
+              fontWeight: FontWeight.w500,
+              color: Colors.black,
+            ),
           ),
-          subtitle: const Text('enqusoft@gmail.com — we reply within 24–48h', style: TextStyle(color: Colors.black87),),
+          subtitle: const Text(
+            'enqusoft@gmail.com — we reply within 24–48h',
+            style: TextStyle(color: Colors.black87),
+          ),
           trailing: const Icon(Icons.chevron_right),
           onTap: () => context.push(AppRoutes.contactUs),
+        ),
+        const SizedBox(height: 8),
+        ListTile(
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(10),
+          ),
+          tileColor: Colors.grey[50],
+          leading: Container(
+            width: 36,
+            height: 36,
+            decoration: BoxDecoration(
+              color: AppTheme.primary.withOpacity(0.1),
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Icon(Icons.info_outline, color: AppTheme.primary, size: 20),
+          ),
+          title: const Text(
+            'About',
+            style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500, color: Colors.black),
+          ),
+          subtitle: const Text('About Perfect Resume Art & EnquSoft',style: TextStyle(color: Colors.black87),),
+          trailing: const Icon(Icons.chevron_right),
+          onTap: () => context.push(AppRoutes.about),
         ),
         if (user?.role == 'admin') ...[
           const SizedBox(height: 8),
@@ -570,7 +608,11 @@ class _AttachReferralCodeCardState
             const Expanded(
               child: Text(
                 'Got a referral code? Add it here',
-                style: TextStyle(fontSize: 13, fontWeight: FontWeight.w500,color: Colors.black),
+                style: TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w500,
+                  color: Colors.black,
+                ),
               ),
             ),
             _submitting
