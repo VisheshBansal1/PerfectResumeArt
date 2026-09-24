@@ -30,6 +30,11 @@ class ResumeGeneratorScreen extends ConsumerStatefulWidget {
 class _ResumeGeneratorScreenState extends ConsumerState<ResumeGeneratorScreen> {
   int _step = 0;
 
+  // Local, per-session only — set when the user watches a rewarded ad
+  // instead of paying. Never persisted to unlockProvider/Firestore, so it
+  // grants this one visit's use of the feature only.
+  bool _adUnlockedThisSession = false;
+
   // ── Form Controllers ──────────────────────────────────────────────────────
   final _nameCtrl = TextEditingController();
   final _emailCtrl = TextEditingController();
@@ -357,17 +362,20 @@ class _ResumeGeneratorScreenState extends ConsumerState<ResumeGeneratorScreen> {
   }
 
   Future<void> _handleUnlock() async {
-    final paid = await PaywallSheet.show(
+    final result = await PaywallSheet.show(
       context,
       plan: PaymentPlan.resumeGenerator,
       userEmail: widget.userEmail,
       userName: widget.userName,
     );
-    if (paid && mounted) {
+    if (!mounted || result == PaywallResult.cancelled) return;
+    if (result == PaywallResult.purchased) {
       await ref.read(unlockProvider.notifier).unlock('resume_generator');
-      if (_step == _fastTrackStep && _roleCtrl.text.trim().isNotEmpty) {
-        _generate();
-      }
+    } else if (result == PaywallResult.watchedAd) {
+      setState(() => _adUnlockedThisSession = true);
+    }
+    if (_step == _fastTrackStep && _roleCtrl.text.trim().isNotEmpty) {
+      _generate();
     }
   }
 
@@ -380,7 +388,8 @@ class _ResumeGeneratorScreenState extends ConsumerState<ResumeGeneratorScreen> {
     final _unlockSet = ref.watch(unlockProvider);
     final unlocked =
         _unlockSet.contains('resume_generator') ||
-        _unlockSet.contains('bundle');
+        _unlockSet.contains('bundle') ||
+        _adUnlockedThisSession;
 
     return Scaffold(
       backgroundColor: isDark ? AppTheme.surfaceDark : AppTheme.surfaceLight,

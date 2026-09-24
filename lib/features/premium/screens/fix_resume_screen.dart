@@ -31,6 +31,12 @@ class FixResumeScreen extends ConsumerStatefulWidget {
 class _FixResumeScreenState extends ConsumerState<FixResumeScreen>
     with SingleTickerProviderStateMixin {
   late TabController _tab;
+
+  // Set when the user watches a rewarded ad instead of paying. This is a
+  // local, per-session flag ONLY — unlike a real purchase, it's never
+  // written to unlockProvider/Firestore, so it grants this one visit's use
+  // of the feature and resets next time the screen is opened.
+  bool _adUnlockedThisSession = false;
   String get _effectiveResumeText {
     if (widget.resumeText.trim().length > 50) return widget.resumeText;
     // Fall back to global context if no text passed directly
@@ -56,16 +62,19 @@ class _FixResumeScreenState extends ConsumerState<FixResumeScreen>
   }
 
   Future<void> _handleUnlock() async {
-    final paid = await PaywallSheet.show(
+    final result = await PaywallSheet.show(
       context,
       plan: PaymentPlan.fixResume,
       userEmail: widget.userEmail,
       userName: widget.userName,
     );
-    if (paid && mounted) {
+    if (!mounted || result == PaywallResult.cancelled) return;
+    if (result == PaywallResult.purchased) {
       await ref.read(unlockProvider.notifier).unlock('fix_resume');
-      _startFix();
+    } else if (result == PaywallResult.watchedAd) {
+      setState(() => _adUnlockedThisSession = true);
     }
+    _startFix();
   }
 
   @override
@@ -73,7 +82,9 @@ class _FixResumeScreenState extends ConsumerState<FixResumeScreen>
     final state = ref.watch(fixResumeProvider);
     // Watch unlockProvider reactively — updates instantly when Firestore loads
     // or when user purchases. No local bool needed.
-    final unlocked = ref.watch(unlockProvider).contains('fix_resume');
+    final unlocked =
+        ref.watch(unlockProvider).contains('fix_resume') ||
+        _adUnlockedThisSession;
 
     // Auto-start fix as soon as unlock is confirmed (covers returning users)
     if (unlocked &&

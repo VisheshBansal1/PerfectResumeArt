@@ -57,6 +57,8 @@ class ReferralDashboardSummary {
   final double lifetimeEarnings;
   final double minWithdrawal;
   final bool hasPendingWithdrawal;
+  final double commissionPercent;
+  final double discountPercent;
   final ReferralStats stats;
 
   const ReferralDashboardSummary({
@@ -67,23 +69,27 @@ class ReferralDashboardSummary {
     this.lifetimeEarnings = 0,
     this.minWithdrawal = 500,
     this.hasPendingWithdrawal = false,
+    this.commissionPercent = 20,
+    this.discountPercent = 10,
     this.stats = const ReferralStats(),
   });
 
-  factory ReferralDashboardSummary.fromJson(Map<String, dynamic> json) =>
-      ReferralDashboardSummary(
-        referralCode: json['referralCode'] as String?,
-        walletBalance: (json['walletBalance'] as num?)?.toDouble() ?? 0,
-        pendingBalance: (json['pendingBalance'] as num?)?.toDouble() ?? 0,
-        withdrawableBalance:
-            (json['withdrawableBalance'] as num?)?.toDouble() ?? 0,
-        lifetimeEarnings: (json['lifetimeEarnings'] as num?)?.toDouble() ?? 0,
-        minWithdrawal: (json['minWithdrawal'] as num?)?.toDouble() ?? 500,
-        hasPendingWithdrawal: json['hasPendingWithdrawal'] == true,
-        stats: json['stats'] != null
-            ? ReferralStats.fromJson(json['stats'] as Map<String, dynamic>)
-            : const ReferralStats(),
-      );
+  factory ReferralDashboardSummary.fromJson(
+    Map<String, dynamic> json,
+  ) => ReferralDashboardSummary(
+    referralCode: json['referralCode'] as String?,
+    walletBalance: (json['walletBalance'] as num?)?.toDouble() ?? 0,
+    pendingBalance: (json['pendingBalance'] as num?)?.toDouble() ?? 0,
+    withdrawableBalance: (json['withdrawableBalance'] as num?)?.toDouble() ?? 0,
+    lifetimeEarnings: (json['lifetimeEarnings'] as num?)?.toDouble() ?? 0,
+    minWithdrawal: (json['minWithdrawal'] as num?)?.toDouble() ?? 500,
+    hasPendingWithdrawal: json['hasPendingWithdrawal'] == true,
+    commissionPercent: (json['commissionPercent'] as num?)?.toDouble() ?? 20,
+    discountPercent: (json['discountPercent'] as num?)?.toDouble() ?? 10,
+    stats: json['stats'] != null
+        ? ReferralStats.fromJson(json['stats'] as Map<String, dynamic>)
+        : const ReferralStats(),
+  );
 }
 
 /// An unread notification about something that happened while the user
@@ -217,10 +223,9 @@ class ReferralService {
       // first interaction was tapping "Sign in with Google" straight from
       // Login, or main()'s one-time capture missed for any reason), check
       // whether the CURRENT browser URL still shows a ?ref= param before
-      // giving up. Reads Uri.base directly rather than go_router's state —
-      // this app uses the default hash URL strategy, so go_router's own
-      // view of "the current location" is scoped to the #fragment and
-      // would never see a plain ?ref= query param sitting outside it.
+      // giving up. Reads Uri.base directly rather than go_router's state
+      // purely as a second, independent source — cheap insurance that
+      // doesn't depend on go_router's lifecycle having already run.
       if ((code == null || code.isEmpty) && kIsWeb) {
         final fresh = Uri.base.queryParameters['ref'];
         if (fresh != null && fresh.trim().isNotEmpty) {
@@ -440,7 +445,7 @@ class ReferralService {
     if (kIsWeb) {
       return '${Uri.base.origin}/?ref=$code';
     }
-    return 'https://perfectresumeart.netlify.app/?ref=$code';
+    return 'https://perfectresumeart.in/?ref=$code';
   }
 
   // ── Earn & Refer dashboard data ─────────────────────────────────────────
@@ -559,11 +564,6 @@ class ReferralService {
   }
 }
 
-// Small badge shown next to "Earn & Refer" wherever it appears (nav drawer,
-// profile) — a reason to check it beyond remembering it exists. Lives here
-// (not on any one screen) so every screen that shows the entry can share
-// the same provider instance instead of each re-fetching independently.
-// autoDispose keeps it from lingering once nothing's watching it.
 final unreadReferralNotificationsProvider = FutureProvider.autoDispose<int>((
   ref,
 ) async {

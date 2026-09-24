@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 import '../../../core/constants/app_theme.dart';
 import '../../../core/router/app_router.dart';
 import '../../../core/services/local_resume_analyzer.dart';
+import '../../../core/widgets/scanning_overlay.dart';
 import '../../../providers/providers.dart';
 import '../../../providers/resume_context_provider.dart';
 import '../widgets/loaded_resume_card.dart';
@@ -29,7 +30,9 @@ class _AtsCheckerScreenState extends ConsumerState<AtsCheckerScreen> {
 
     if (input != null && input.isFromFile && input.bytes != null) {
       // Real file this session — use it directly (accurate file name/type in metadata)
-      analysisId = await ref.read(resumeUploadProvider.notifier).uploadAndAnalyzeAtsFromBytes(
+      analysisId = await ref
+          .read(resumeUploadProvider.notifier)
+          .uploadAndAnalyzeAtsFromBytes(
             bytes: input.bytes!,
             fileName: input.fileName ?? 'resume',
             extension: input.extension ?? 'pdf',
@@ -39,7 +42,9 @@ class _AtsCheckerScreenState extends ConsumerState<AtsCheckerScreen> {
       // screen — same canonical AiService.analyzeAtsOnly call either way.
       final ctx = ref.read(resumeContextProvider);
       if (!ctx.hasResume) return;
-      analysisId = await ref.read(resumeUploadProvider.notifier).uploadAndAnalyzeAtsFromText(ctx.text);
+      analysisId = await ref
+          .read(resumeUploadProvider.notifier)
+          .uploadAndAnalyzeAtsFromText(ctx.text);
     }
 
     if (analysisId != null && mounted) {
@@ -72,7 +77,10 @@ class _AtsCheckerScreenState extends ConsumerState<AtsCheckerScreen> {
             const SizedBox(height: 20),
             _buildJdMatchCta(),
             const SizedBox(height: 28),
-            const Text('Your Resume', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
+            const Text(
+              'Your Resume',
+              style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+            ),
             const SizedBox(height: 12),
             if (!showPanel)
               LoadedResumeCard(
@@ -94,7 +102,10 @@ class _AtsCheckerScreenState extends ConsumerState<AtsCheckerScreen> {
                 Center(
                   child: TextButton(
                     onPressed: () => setState(() => _changingResume = false),
-                    child: const Text('Cancel', style: TextStyle(fontSize: 12.5)),
+                    child: const Text(
+                      'Cancel',
+                      style: TextStyle(fontSize: 12.5),
+                    ),
                   ),
                 ),
               ],
@@ -132,7 +143,11 @@ class _AtsCheckerScreenState extends ConsumerState<AtsCheckerScreen> {
             color: Colors.white.withOpacity(0.2),
             borderRadius: BorderRadius.circular(14),
           ),
-          child: const Icon(Icons.fact_check_outlined, color: Colors.white, size: 30),
+          child: const Icon(
+            Icons.fact_check_outlined,
+            color: Colors.white,
+            size: 30,
+          ),
         ),
         const SizedBox(width: 16),
         const Expanded(
@@ -141,7 +156,11 @@ class _AtsCheckerScreenState extends ConsumerState<AtsCheckerScreen> {
             children: [
               Text(
                 'ATS Compatibility Checker',
-                style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.w700),
+                style: TextStyle(
+                  color: Colors.white,
+                  fontSize: 16,
+                  fontWeight: FontWeight.w700,
+                ),
               ),
               SizedBox(height: 4),
               Text(
@@ -169,7 +188,10 @@ class _AtsCheckerScreenState extends ConsumerState<AtsCheckerScreen> {
           children: [
             Icon(Icons.lightbulb_outline, color: Colors.purple, size: 18),
             const SizedBox(width: 8),
-            const Text('What is ATS?', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 14)),
+            const Text(
+              'What is ATS?',
+              style: TextStyle(fontWeight: FontWeight.w600, fontSize: 14),
+            ),
           ],
         ),
         const SizedBox(height: 8),
@@ -177,7 +199,11 @@ class _AtsCheckerScreenState extends ConsumerState<AtsCheckerScreen> {
           'ATS (Applicant Tracking System) is software recruiters use to automatically filter resumes. '
           '75% of resumes are rejected by ATS before a human ever reads them. '
           'Our checker evaluates your resume\'s formatting, keywords, and structure.',
-          style: TextStyle(fontSize: 13, color: AppTheme.textSecondary, height: 1.5),
+          style: TextStyle(
+            fontSize: 13,
+            color: AppTheme.textSecondary,
+            height: 1.5,
+          ),
         ),
       ],
     ),
@@ -203,17 +229,27 @@ class _AtsCheckerScreenState extends ConsumerState<AtsCheckerScreen> {
               children: [
                 const Icon(Icons.bolt_outlined, color: Colors.purple, size: 18),
                 const SizedBox(width: 8),
-                const Text('Instant Health Scan', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 14)),
+                const Text(
+                  'Instant Health Scan',
+                  style: TextStyle(fontWeight: FontWeight.w700, fontSize: 14),
+                ),
                 const SizedBox(width: 8),
                 Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 7,
+                    vertical: 2,
+                  ),
                   decoration: BoxDecoration(
                     color: AppTheme.success.withOpacity(0.12),
                     borderRadius: BorderRadius.circular(6),
                   ),
                   child: const Text(
                     'FREE',
-                    style: TextStyle(fontSize: 9.5, fontWeight: FontWeight.w800, color: AppTheme.success),
+                    style: TextStyle(
+                      fontSize: 9.5,
+                      fontWeight: FontWeight.w800,
+                      color: AppTheme.success,
+                    ),
                   ),
                 ),
               ],
@@ -223,7 +259,11 @@ class _AtsCheckerScreenState extends ConsumerState<AtsCheckerScreen> {
               '13 real checks — contact info, section headers, action verbs, quantified impact, '
               'parseability, and more — computed instantly on your device the moment you add a resume '
               'below. No AI call, no waiting, unlimited use.',
-              style: TextStyle(fontSize: 12.5, color: AppTheme.textSecondary, height: 1.5),
+              style: TextStyle(
+                fontSize: 12.5,
+                color: AppTheme.textSecondary,
+                height: 1.5,
+              ),
             ),
           ],
         ),
@@ -247,6 +287,13 @@ class _AtsCheckerScreenState extends ConsumerState<AtsCheckerScreen> {
           end: Alignment.bottomRight,
         ),
         borderRadius: BorderRadius.circular(14),
+        boxShadow: [
+          BoxShadow(
+            color: AppTheme.primary.withOpacity(0.22),
+            blurRadius: 18,
+            offset: const Offset(0, 6),
+          ),
+        ],
       ),
       child: Row(
         children: [
@@ -257,7 +304,11 @@ class _AtsCheckerScreenState extends ConsumerState<AtsCheckerScreen> {
               color: Colors.white.withOpacity(0.18),
               borderRadius: BorderRadius.circular(11),
             ),
-            child: const Icon(Icons.manage_search, color: Colors.white, size: 22),
+            child: const Icon(
+              Icons.manage_search,
+              color: Colors.white,
+              size: 22,
+            ),
           ),
           const SizedBox(width: 12),
           const Expanded(
@@ -266,7 +317,11 @@ class _AtsCheckerScreenState extends ConsumerState<AtsCheckerScreen> {
               children: [
                 Text(
                   'Have a specific job in mind?',
-                  style: TextStyle(color: Colors.white, fontWeight: FontWeight.w700, fontSize: 13),
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontWeight: FontWeight.w700,
+                    fontSize: 13,
+                  ),
                 ),
                 SizedBox(height: 2),
                 Text(
@@ -282,39 +337,66 @@ class _AtsCheckerScreenState extends ConsumerState<AtsCheckerScreen> {
     ),
   );
 
+  String _statusLabel(
+    ResumeUploadState uploadState,
+    ResumeContext ctx,
+    bool hasFile,
+  ) => uploadState.isExtracting
+      ? 'Reading resume...'
+      : uploadState.isUploading
+      ? 'Uploading...'
+      : uploadState.isAnalyzing
+      ? 'Running deep AI check...'
+      : ctx.hasResume && !hasFile
+      ? 'Run Deep AI Check on Your Resume'
+      : 'Run Deep AI Check';
+
   Widget _buildRunButton(ResumeUploadState uploadState, ResumeContext ctx) {
     final hasFile = _currentInput != null;
     final canRun = (hasFile || ctx.hasResume) && !uploadState.isLoading;
+    final label = _statusLabel(uploadState, ctx, hasFile);
 
-    return SizedBox(
-      width: double.infinity,
-      child: ElevatedButton.icon(
-        onPressed: canRun ? _runAtsCheck : null,
-        style: ElevatedButton.styleFrom(
-          backgroundColor: Colors.purple,
-          foregroundColor: Colors.white,
-          padding: const EdgeInsets.symmetric(vertical: 14),
+    return Column(
+      children: [
+        SizedBox(
+          width: double.infinity,
+          child: ElevatedButton.icon(
+            onPressed: canRun ? _runAtsCheck : null,
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.purple,
+              foregroundColor: Colors.white,
+              padding: const EdgeInsets.symmetric(vertical: 14),
+            ),
+            icon: uploadState.isLoading
+                ? const SizedBox(
+                    height: 18,
+                    width: 18,
+                    child: CircularProgressIndicator(
+                      color: Colors.white,
+                      strokeWidth: 2,
+                    ),
+                  )
+                : const Icon(Icons.psychology_alt_outlined),
+            label: Text(
+              label,
+              style: const TextStyle(fontWeight: FontWeight.w700),
+            ),
+          ),
         ),
-        icon: uploadState.isLoading
-            ? const SizedBox(
-                height: 18,
-                width: 18,
-                child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2),
-              )
-            : const Icon(Icons.psychology_alt_outlined),
-        label: Text(
-          uploadState.isExtracting
-              ? 'Reading resume...'
-              : uploadState.isUploading
-                  ? 'Uploading...'
-                  : uploadState.isAnalyzing
-                      ? 'Running deep AI check...'
-                      : ctx.hasResume && !hasFile
-                          ? 'Run Deep AI Check on Your Resume'
-                          : 'Run Deep AI Check',
-          style: const TextStyle(fontWeight: FontWeight.w700),
+        AnimatedSwitcher(
+          duration: const Duration(milliseconds: 250),
+          child: uploadState.isLoading
+              ? Padding(
+                  key: const ValueKey('scanning'),
+                  padding: const EdgeInsets.only(top: 28, bottom: 8),
+                  child: ScanningOverlay(
+                    label: label,
+                    icon: Icons.psychology_alt_outlined,
+                  ),
+                )
+              : const SizedBox.shrink(key: ValueKey('idle')),
         ),
-      ),
+      ],
     );
   }
 

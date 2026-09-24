@@ -38,11 +38,11 @@ class AboutScreen extends StatelessWidget {
           children: [
             _buildAppHero(),
             const SizedBox(height: 26),
-            _buildAppDescription(),
+            _buildAppDescription(context),
             const SizedBox(height: 20),
             _buildFeatureGrid(),
             const SizedBox(height: 32),
-            _buildSectionDivider('Who Builds It'),
+            _buildSectionDivider(context, 'Who Builds It'),
             const SizedBox(height: 20),
             _buildEnquSoftCard(),
             const SizedBox(height: 22),
@@ -121,13 +121,17 @@ class AboutScreen extends StatelessWidget {
     );
   }
 
-  Widget _buildAppDescription() {
-    return const Text(
+  Widget _buildAppDescription(BuildContext context) {
+    return Text(
       'Perfect Resume Art scores your resume the way both a recruiter and an '
       'ATS bot would, then shows you exactly what to fix. Match it against a '
       'job description, discover roles with our AI Job Finder, or get a '
       'second opinion from a real reviewer.',
-      style: TextStyle(fontSize: 14, height: 1.55, color: Colors.white),
+      style: TextStyle(
+        fontSize: 14,
+        height: 1.55,
+        color: AppTheme.textMain(context),
+      ),
     );
   }
 
@@ -185,23 +189,23 @@ class AboutScreen extends StatelessWidget {
     );
   }
 
-  Widget _buildSectionDivider(String label) {
+  Widget _buildSectionDivider(BuildContext context, String label) {
     return Row(
       children: [
-        Expanded(child: Divider(color: Colors.grey[300])),
+        Expanded(child: Divider(color: AppTheme.border(context))),
         Padding(
           padding: const EdgeInsets.symmetric(horizontal: 12),
           child: Text(
             label,
             style: TextStyle(
               fontSize: 12,
-              color: Colors.grey[500],
+              color: AppTheme.textMuted(context),
               fontWeight: FontWeight.w600,
               letterSpacing: 0.3,
             ),
           ),
         ),
-        Expanded(child: Divider(color: Colors.grey[300])),
+        Expanded(child: Divider(color: AppTheme.border(context))),
       ],
     );
   }
@@ -294,9 +298,11 @@ class AboutScreen extends StatelessWidget {
       width: double.infinity,
       padding: const EdgeInsets.all(18),
       decoration: BoxDecoration(
-        color: Colors.grey[50],
+        color: AppTheme.accent.withOpacity(
+          AppTheme.isDark(context) ? 0.08 : 0.06,
+        ),
         borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: Colors.grey[200]!),
+        border: Border.all(color: AppTheme.accent.withOpacity(0.25)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -305,17 +311,25 @@ class AboutScreen extends StatelessWidget {
             children: [
               Icon(Icons.lightbulb_rounded, color: AppTheme.accent, size: 20),
               const SizedBox(width: 8),
-              const Text(
+              Text(
                 'Have an Idea?',
-                style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700),
+                style: TextStyle(
+                  fontSize: 15,
+                  fontWeight: FontWeight.w700,
+                  color: AppTheme.textMain(context),
+                ),
               ),
             ],
           ),
           const SizedBox(height: 6),
-          const Text(
+          Text(
             'You bring the idea, we build the solution — startup, business '
             'website, mobile app, or enterprise software.',
-            style: TextStyle(fontSize: 13, color: Colors.black87, height: 1.5),
+            style: TextStyle(
+              fontSize: 13,
+              color: AppTheme.textMuted(context),
+              height: 1.5,
+            ),
           ),
           const SizedBox(height: 14),
           InkWell(
@@ -324,25 +338,29 @@ class AboutScreen extends StatelessWidget {
             child: Container(
               padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
               decoration: BoxDecoration(
-                color: Colors.white,
+                color: AppTheme.cardBg(context),
                 borderRadius: BorderRadius.circular(10),
-                border: Border.all(color: Colors.grey[300]!),
+                border: Border.all(color: AppTheme.border(context)),
               ),
               child: Row(
                 children: [
                   Icon(Icons.email_outlined, size: 17, color: AppTheme.primary),
                   const SizedBox(width: 10),
-                  const Expanded(
+                  Expanded(
                     child: Text(
                       'enqusoft@gmail.com',
                       style: TextStyle(
                         fontSize: 13.5,
-                        color: Colors.black,
+                        color: AppTheme.textMain(context),
                         fontWeight: FontWeight.w500,
                       ),
                     ),
                   ),
-                  Icon(Icons.copy_rounded, size: 16, color: Colors.grey[500]),
+                  Icon(
+                    Icons.copy_rounded,
+                    size: 16,
+                    color: AppTheme.textMuted(context),
+                  ),
                 ],
               ),
             ),
@@ -503,7 +521,7 @@ class _ServiceChip extends StatelessWidget {
             item.label,
             style: TextStyle(
               fontSize: 12.5,
-              color: Colors.white,
+              color: AppTheme.primary,
               fontWeight: FontWeight.w500,
             ),
           ),

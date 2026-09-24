@@ -836,13 +836,17 @@ class _HumanReviewScreenState extends ConsumerState<HumanReviewScreen> {
         unlocks.contains('human_review') || unlocks.contains('bundle');
 
     if (!isUnlocked) {
-      final paid = await PaywallSheet.show(
+      // A real person manually reviews and rewrites the resume for this
+      // plan, so it's excluded from the rewarded-ad path — only a genuine
+      // purchase can unlock it.
+      final result = await PaywallSheet.show(
         context,
         plan: PaymentPlan.humanReview,
         userEmail: widget.userEmail,
         userName: widget.userName,
+        allowAdUnlock: false,
       );
-      if (!paid || !mounted) return;
+      if (result != PaywallResult.purchased || !mounted) return;
       await ref.read(unlockProvider.notifier).unlock('human_review');
     }
 

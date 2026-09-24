@@ -27,10 +27,12 @@
 
   <!-- ═══════════════════════════════════════════════════════════════════
        SEO — PRIMARY META TAGS
-       Placeholder domain used throughout this file: https://perfectresumeart.com
-       Replace every occurrence with your real production domain once you've
-       deployed (Netlify/Cloudflare/custom) — search didn't find an existing
-       live domain for this app, so nothing was assumed here.
+       Live production domain: https://perfectresumeart.in
+       ⚠️ ReferralService.getReferralLink() and jd_keyword_match_screen.dart's
+       share message still hard-code the OLD perfectresumeart.netlify.app
+       host for real share links (not just this file) — fixed in both
+       alongside this file. If the domain changes again, grep the whole
+       repo for it, not just web/.
   ═══════════════════════════════════════════════════════════════════ -->
   <title>Perfect Resume Art — Free AI Resume Analyzer & ATS Score Checker</title>
   <meta name="description" content="Perfect Resume Art analyzes your resume with AI in seconds — get a free ATS score, match your resume against any job description, and fix weak sections. Premium AI resume builder and optimization tools available.">
@@ -38,7 +40,7 @@
   <meta name="author" content="Perfect Resume Art">
   <meta name="robots" content="index, follow, max-image-preview:large, max-snippet:-1, max-video-preview:-1">
   <meta name="googlebot" content="index, follow">
-  <link rel="canonical" href="https://perfectresumeart.netlify.app//">
+  <link rel="canonical" href="https://perfectresumeart.in/">
   <meta http-equiv="content-language" content="en">
   <meta name="referrer" content="strict-origin-when-cross-origin">
 
@@ -48,12 +50,7 @@
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black">
   <meta name="apple-mobile-web-app-title" content="Perfect Resume Art">
-  <link rel="apple-touch-icon" href="icons/Icon-192.png">
-  <!-- If you generate dedicated sizes, add them for sharper home-screen icons:
-  <link rel="apple-touch-icon" sizes="152x152" href="icons/apple-touch-icon-152.png">
-  <link rel="apple-touch-icon" sizes="167x167" href="icons/apple-touch-icon-167.png">
-  <link rel="apple-touch-icon" sizes="180x180" href="icons/apple-touch-icon-180.png">
-  -->
+  <link rel="apple-touch-icon" sizes="180x180" href="apple-touch-icon.png">
 
   <!-- ═══════════════════════════════════════════════════════════════════
        MICROSOFT / WINDOWS TILE TAGS
@@ -61,30 +58,38 @@
        file if you actually want custom Windows tile behaviour; harmless
        to leave unreferenced-but-missing (browsers just ignore a 404 here).
   ═══════════════════════════════════════════════════════════════════ -->
-  <meta name="msapplication-TileColor" content="#2D5BE3">
-  <meta name="msapplication-TileImage" content="icons/Icon-192.png">
+  <meta name="msapplication-TileColor" content="#4F46E5">
+  <meta name="msapplication-TileImage" content="mstile-150x150.png">
   <meta name="msapplication-config" content="browserconfig.xml">
   <meta name="msapplication-tap-highlight" content="no">
 
   <!-- ═══════════════════════════════════════════════════════════════════
        THEME COLOR & COLOR SCHEME
-       #2D5BE3 = your existing AppTheme.primary from the Flutter app.
+       #4F46E5 = your real AppTheme.primary ("Royal Indigo", app_theme.dart).
+       This file previously used #2D5BE3 here, which doesn't match the
+       actual app anywhere — fixed so the browser chrome/PWA splash tint
+       matches what's really in the app. Note the Razorpay bridge script
+       below still themes its checkout modal with the old #2D5BE3 — left
+       untouched since that block is marked "preserved exactly"; it's a
+       one-line change if you want it to match (search for `theme:` further
+       down this file).
   ═══════════════════════════════════════════════════════════════════ -->
-  <meta name="theme-color" content="#2D5BE3">
+  <meta name="theme-color" content="#4F46E5">
   <meta name="color-scheme" content="light dark">
 
   <!-- ═══════════════════════════════════════════════════════════════════
        OPEN GRAPH (Facebook, LinkedIn, WhatsApp previews, etc.)
-       og:image should be a real 1200×630 social preview image — the
-       512×512 app icon works but is not ideal; swap in a dedicated
-       banner at that path once you have one.
+       og:image points at a real 1200×630 banner (og-image.png, generated
+       from your actual logo + brand colors) — upload it to the web/ root
+       alongside index.html. See docs/05-favicons-and-images.md.
   ═══════════════════════════════════════════════════════════════════ -->
   <meta property="og:title" content="Perfect Resume Art — Free AI Resume Analyzer & ATS Score Checker">
   <meta property="og:description" content="Get a free AI-powered ATS score, match your resume against any job description, and fix weak sections in seconds.">
-  <meta property="og:image" content="https://perfectresumeart.netlify.app//icons/Icon-512.png">
-  <meta property="og:image:width" content="512">
-  <meta property="og:image:height" content="512">
-  <meta property="og:url" content="https://perfectresumeart.netlify.app//">
+  <meta property="og:image" content="https://perfectresumeart.in/og-image.png">
+  <meta property="og:image:width" content="1200">
+  <meta property="og:image:height" content="630">
+  <meta property="og:image:alt" content="Perfect Resume Art — free AI resume checker and ATS score analyzer">
+  <meta property="og:url" content="https://perfectresumeart.in/">
   <meta property="og:type" content="website">
   <meta property="og:site_name" content="Perfect Resume Art">
   <meta property="og:locale" content="en_US">
@@ -95,18 +100,18 @@
   <meta name="twitter:card" content="summary_large_image">
   <meta name="twitter:title" content="Perfect Resume Art — Free AI Resume Analyzer & ATS Score Checker">
   <meta name="twitter:description" content="Get a free AI-powered ATS score, match your resume against any job description, and fix weak sections in seconds.">
-  <meta name="twitter:image" content="https://perfectresumeart.netlify.app//icons/Icon-512.png">
+  <meta name="twitter:image" content="https://perfectresumeart.in/og-image.png">
   <!-- <meta name="twitter:creator" content="@YourHandle"> add once you have one -->
 
   <!-- ═══════════════════════════════════════════════════════════════════
        FAVICONS / PWA ICONS
   ═══════════════════════════════════════════════════════════════════ -->
+  <link rel="icon" href="favicon.ico" sizes="any">
+  <link rel="icon" type="image/png" sizes="32x32" href="favicon-32x32.png">
+  <link rel="icon" type="image/png" sizes="16x16" href="favicon-16x16.png">
   <link rel="icon" type="image/png" href="favicon.png"/>
-  <!-- Flutter's default web build only outputs favicon.png, not a .ico.
-       Add one (any favicon generator) and uncomment for older-browser support:
-  <link rel="icon" href="favicon.ico" sizes="any"> -->
   <!-- Safari pinned-tab icon — needs a real single-color SVG at this path:
-  <link rel="mask-icon" href="icons/safari-pinned-tab.svg" color="#2D5BE3"> -->
+  <link rel="mask-icon" href="icons/safari-pinned-tab.svg" color="#4F46E5"> -->
   <link rel="manifest" href="manifest.json">
 
   <!-- ═══════════════════════════════════════════════════════════════════
@@ -165,9 +170,10 @@
     "@context": "https://schema.org",
     "@type": "Organization",
     "name": "Perfect Resume Art",
-    "url": "https://perfectresumeart.netlify.app/",
-    "logo": "https://perfectresumeart.netlify.app//icons/Icon-512.png",
-    "description": "AI-powered resume analysis, ATS scoring, and resume building platform."
+    "url": "https://perfectresumeart.in/",
+    "logo": "https://perfectresumeart.in/icons/Icon-512.png",
+    "description": "AI-powered resume analysis, ATS scoring, and resume building platform.",
+    "email": "enqusoft@gmail.com"
   }
   </script>
   <script type="application/ld+json">
@@ -175,7 +181,7 @@
     "@context": "https://schema.org",
     "@type": "WebSite",
     "name": "Perfect Resume Art",
-    "url": "https://perfectresumeart.netlify.app/"
+    "url": "https://perfectresumeart.in/"
   }
   </script>
   <!--
@@ -210,6 +216,62 @@
       "priceCurrency": "INR",
       "description": "Free ATS score check, with premium AI tools available via one-time purchase or a rewarded-ad unlock."
     }
+  }
+  </script>
+
+  <!-- FAQPage — this text must also appear visibly on the page (see the
+       #seo-prerender-content block in <body>, which uses the same Q&A) —
+       Google requires structured data to match visible content. Note:
+       Google retired the visual FAQ rich-result for commercial sites in
+       May 2026, so this no longer produces a blue dropdown in Google
+       search — it's now read by AI answer engines (ChatGPT, Perplexity,
+       Claude, Gemini) forming an answer, not by Google's SERP UI. -->
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "FAQPage",
+    "mainEntity": [
+      {
+        "@type": "Question",
+        "name": "Is Perfect Resume Art free?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "Yes. The Instant Health Scan on the ATS Checker and the Free ATS Preview are both free with no account needed. Creating a free account unlocks the Deep AI Check, saves your results, and adds JD keyword matching, an AI resume builder, and more."
+        }
+      },
+      {
+        "@type": "Question",
+        "name": "What is an ATS and why does my resume need to pass it?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "An Applicant Tracking System (ATS) is software recruiters use to automatically filter resumes before a human ever reads them. Perfect Resume Art checks your resume's formatting, keywords, and structure against the same signals real ATS platforms use."
+        }
+      },
+      {
+        "@type": "Question",
+        "name": "Can Perfect Resume Art match my resume to a specific job description?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "Yes \u2014 the JD keyword matcher compares any pasted job description against your resume and shows exactly which keywords and skills are missing."
+        }
+      },
+      {
+        "@type": "Question",
+        "name": "Does Perfect Resume Art build a resume from scratch?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "Yes, with the AI Resume Builder. Perfect Resume Art also offers AI-guided fixes for an existing resume and a Human Expert Review for a second opinion from a real reviewer."
+        }
+      },
+      {
+        "@type": "Question",
+        "name": "Does Perfect Resume Art help me find jobs too?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "Yes \u2014 the AI Job Finder matches live roles to your resume so you can find relevant openings alongside optimizing your application."
+        }
+      }
+    ]
   }
   </script>
 
@@ -371,6 +433,112 @@
 </head>
 
 <body>
+  <!-- ═══════════════════════════════════════════════════════════════════
+       SEO / AI-CRAWLER PRE-RENDER CONTENT
+       Flutter Web (CanvasKit/Skwasm — the HTML renderer was removed in the
+       3.29 stable release, there's no fallback) paints the whole UI to a
+       canvas. Googlebot partially renders JS; GPTBot, ClaudeBot,
+       PerplexityBot and most AI crawlers largely do not. Without this
+       block, those crawlers receive almost no readable text about what
+       this app does. This is real semantic HTML — the same facts as the
+       FAQPage schema above — shown until Flutter's first frame paints,
+       then hidden by the script at the bottom of this block. A human
+       visitor on a normal connection will not see it linger.
+  ═══════════════════════════════════════════════════════════════════ -->
+  <!-- <div id="seo-prerender-content">
+    <header>
+      <h1>Perfect Resume Art — Free AI Resume Analyzer &amp; ATS Score Checker</h1>
+      <p>
+        Perfect Resume Art scores your resume the way both a recruiter and an ATS
+        bot would, then shows you exactly what to fix. Match it against a job
+        description, discover roles with the AI Job Finder, or get a second
+        opinion from a real reviewer.
+      </p>
+    </header>
+
+    <section>
+      <h2>Features</h2>
+      <ul>
+        <li><strong>ATS Score Analysis</strong> — see where you stand against real ATS systems, with a free Instant Health Scan that needs no account.</li>
+        <li><strong>JD Keyword Matcher</strong> — paste any job description for a free, instant keyword-gap report.</li>
+        <li><strong>AI Resume Builder</strong> — build or fix your resume with AI guidance.</li>
+        <li><strong>AI Job Finder</strong> — live roles matched to your resume.</li>
+        <li><strong>Human Expert Review</strong> — a real reviewer gives a second opinion.</li>
+      </ul>
+    </section>
+
+    <section>
+      <h2>Frequently asked questions</h2>
+      <h3>Is Perfect Resume Art free?</h3>
+      <p>Yes. The Instant Health Scan on the ATS Checker and the Free ATS Preview are both free with no account needed. Creating a free account unlocks the Deep AI Check, saves your results, and adds JD keyword matching, an AI resume builder, and more.</p>
+
+      <h3>What is an ATS and why does my resume need to pass it?</h3>
+      <p>An Applicant Tracking System (ATS) is software recruiters use to automatically filter resumes before a human ever reads them. Perfect Resume Art checks your resume's formatting, keywords, and structure against the same signals real ATS platforms use.</p>
+
+      <h3>Can Perfect Resume Art match my resume to a specific job description?</h3>
+      <p>Yes — the JD keyword matcher compares any pasted job description against your resume and shows exactly which keywords and skills are missing.</p>
+
+      <h3>Does Perfect Resume Art build a resume from scratch?</h3>
+      <p>Yes, with the AI Resume Builder, alongside AI-guided fixes for an existing resume and a Human Expert Review for a second opinion from a real reviewer.</p>
+
+      <h3>Does Perfect Resume Art help me find jobs too?</h3>
+      <p>Yes — the AI Job Finder matches live roles to your resume so you can find relevant openings alongside optimizing your application.</p>
+    </section>
+
+    <nav aria-label="Perfect Resume Art">
+      <a href="/free-resume-check">Free ATS Preview (no signup)</a>
+      <a href="/ats-checker">ATS Checker</a>
+      <a href="/about">About</a>
+      <a href="/contact">Contact</a>
+    </nav>
+
+    <footer>
+      <p>Built by EnquSoft. Contact: enqusoft@gmail.com</p>
+    </footer>
+  </div>
+
+  <style>
+    /* Not display:none / zero-size on load — that reads as cloaking to some
+       crawlers. Real content, positioned under the loading UI, removed by
+       JS the moment Flutter actually paints. */
+    #seo-prerender-content {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      max-width: 720px;
+      margin: 0 auto;
+      padding: 24px;
+      box-sizing: border-box;
+      font-family: -apple-system, "Segoe UI", Roboto, Arial, sans-serif;
+      line-height: 1.5;
+      color: #1a1a1a;
+      background: #ffffff;
+      z-index: 0;
+    }
+  </style>
+
+  <script>
+    (function () {
+      var seoBlock = document.getElementById('seo-prerender-content');
+      if (!seoBlock) return;
+      function hideSeoBlock() { seoBlock.style.display = 'none'; }
+      // Primary: Flutter's own first-frame signal.
+      window.addEventListener('flutter-first-frame', hideSeoBlock);
+      // Fallback: hide as soon as Flutter's canvas/glass-pane appears, in
+      // case this build doesn't dispatch flutter-first-frame.
+      var observer = new MutationObserver(function () {
+        if (document.querySelector('flt-glass-pane, flutter-view, canvas')) {
+          hideSeoBlock();
+          observer.disconnect();
+        }
+      });
+      observer.observe(document.body, { childList: true, subtree: true });
+      // Last-resort safety net.
+      setTimeout(hideSeoBlock, 8000);
+    })();
+  </script> -->
+
   <!-- Accessibility / SEO fallback for JS-disabled clients and crawlers
        that don't execute JavaScript — Flutter web requires JS to run. -->
   <noscript>

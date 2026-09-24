@@ -31,6 +31,11 @@ class _JdOptimizeScreenState extends ConsumerState<JdOptimizeScreen>
   late TabController _tab;
   final _jdController = TextEditingController();
 
+  // Local, per-session only — set when the user watches a rewarded ad
+  // instead of paying. Never persisted to unlockProvider/Firestore, so it
+  // grants this one visit's use of the feature only.
+  bool _adUnlockedThisSession = false;
+
   @override
   void initState() {
     super.initState();
@@ -70,22 +75,27 @@ class _JdOptimizeScreenState extends ConsumerState<JdOptimizeScreen>
       );
       return;
     }
-    final paid = await PaywallSheet.show(
+    final result = await PaywallSheet.show(
       context,
       plan: PaymentPlan.jdOptimize,
       userEmail: widget.userEmail,
       userName: widget.userName,
     );
-    if (paid && mounted) {
+    if (!mounted || result == PaywallResult.cancelled) return;
+    if (result == PaywallResult.purchased) {
       await ref.read(unlockProvider.notifier).unlock('jd_optimize');
-      _startOptimize();
+    } else if (result == PaywallResult.watchedAd) {
+      setState(() => _adUnlockedThisSession = true);
     }
+    _startOptimize();
   }
 
   @override
   Widget build(BuildContext context) {
     final state = ref.watch(jdOptimizeProvider);
-    final unlocked = ref.watch(unlockProvider).contains('jd_optimize');
+    final unlocked =
+        ref.watch(unlockProvider).contains('jd_optimize') ||
+        _adUnlockedThisSession;
 
     return Scaffold(
       appBar: AppBar(

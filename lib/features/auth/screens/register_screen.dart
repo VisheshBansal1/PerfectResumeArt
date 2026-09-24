@@ -89,7 +89,9 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
     if (result == null || !mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
-        backgroundColor: result == 'attached' ? AppTheme.success : AppTheme.error,
+        backgroundColor: result == 'attached'
+            ? AppTheme.success
+            : AppTheme.error,
         content: Text(
           result == 'attached'
               ? '🎉 Referral code applied — you\u2019re all set!'
@@ -130,205 +132,282 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
     context.go(AppRoutes.home);
   }
 
+  static const double _wideBreakpoint = 900;
+
   @override
   Widget build(BuildContext context) {
     final authState = ref.watch(authNotifierProvider);
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Create Account')),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.all(24),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // ── Google Sign-Up (fastest path) ─────────────────
-            const Text(
-              'Quickest way to get started:',
-              style: TextStyle(fontSize: 13, color: Colors.grey),
-            ),
-            const SizedBox(height: 10),
-            GoogleSignInButton(
-              isLoading: authState.isGoogleLoading,
-              onTap: authState.isGoogleLoading || authState.isLoading
-                  ? null
-                  : _googleSignIn,
-            ),
-            const SizedBox(height: 20),
+      appBar: AppBar(backgroundColor: Colors.transparent, elevation: 0),
+      body: LayoutBuilder(
+        builder: (context, constraints) {
+          final isWide = constraints.maxWidth >= _wideBreakpoint;
 
-            // ── Divider ───────────────────────────────────────
-            Row(
-              children: [
-                const Expanded(child: Divider()),
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 12),
-                  child: Text(
-                    'or register with email',
-                    style: TextStyle(color: Colors.grey[500], fontSize: 12),
-                  ),
-                ),
-                const Expanded(child: Divider()),
-              ],
-            ),
-            const SizedBox(height: 20),
-
-            // ── Email form ────────────────────────────────────
-            Form(
-              key: _formKey,
-              child: Column(
+          // ── Wide (web / tablet-landscape): brand panel + centered form ──
+          if (isWide) {
+            return SizedBox.expand(
+              child: Row(
                 children: [
-                  TextFormField(
-                    controller: _nameCtrl,
-                    textCapitalization: TextCapitalization.words,
-                    decoration: const InputDecoration(
-                      labelText: 'Full name',
-                      prefixIcon: Icon(Icons.person_outline),
-                    ),
-                    validator: (v) => v == null || v.trim().isEmpty
-                        ? 'Enter your name'
-                        : null,
-                  ),
-                  const SizedBox(height: 14),
-                  TextFormField(
-                    controller: _emailCtrl,
-                    keyboardType: TextInputType.emailAddress,
-                    decoration: const InputDecoration(
-                      labelText: 'Email address',
-                      prefixIcon: Icon(Icons.email_outlined),
-                    ),
-                    validator: (v) => v == null || !v.contains('@')
-                        ? 'Enter a valid email'
-                        : null,
-                  ),
-                  const SizedBox(height: 14),
-                  TextFormField(
-                    controller: _passwordCtrl,
-                    obscureText: _obscure,
-                    decoration: InputDecoration(
-                      labelText: 'Password',
-                      prefixIcon: const Icon(Icons.lock_outline),
-                      suffixIcon: IconButton(
-                        icon: Icon(
-                          _obscure
-                              ? Icons.visibility_outlined
-                              : Icons.visibility_off_outlined,
+                  const Expanded(
+                    flex: 5,
+                    child: AuthBrandPanel(
+                      eyebrow: 'AI Resume Platform',
+                      headline: 'Turn your experience\ninto an interview.',
+                      subheadline:
+                          'Upload a resume, get an instant ATS score, and fix what\u2019s holding you back — all in one place.',
+                      features: [
+                        AuthPanelFeature(
+                          Icons.fact_check_rounded,
+                          'Instant ATS compatibility score',
                         ),
-                        onPressed: () => setState(() => _obscure = !_obscure),
-                      ),
-                    ),
-                    validator: (v) => v == null || v.length < 6
-                        ? 'Minimum 6 characters'
-                        : null,
-                  ),
-                  const SizedBox(height: 14),
-                  TextFormField(
-                    controller: _referralCtrl,
-                    textCapitalization: TextCapitalization.characters,
-                    onChanged: _onReferralChanged,
-                    decoration: InputDecoration(
-                      labelText: 'Referral code (optional)',
-                      prefixIcon: const Icon(Icons.card_giftcard_outlined),
-                      suffixIcon: _referralChecking
-                          ? const Padding(
-                              padding: EdgeInsets.all(14),
-                              child: SizedBox(
-                                height: 16,
-                                width: 16,
-                                child: CircularProgressIndicator(strokeWidth: 2),
-                              ),
-                            )
-                          : (_referralResult?.valid == true
-                                ? const Icon(Icons.check_circle, color: Colors.green)
-                                : null),
-                      helperText: _referralFromLink
-                          ? 'Applied from your invite link'
-                          : 'Have a friend\'s code? Enter it for a launch discount.',
-                      errorText: (_referralResult != null && !_referralResult!.valid)
-                          ? _referralResult!.error
-                          : null,
+                        AuthPanelFeature(
+                          Icons.auto_awesome_rounded,
+                          'AI-powered resume feedback',
+                        ),
+                        AuthPanelFeature(
+                          Icons.forum_rounded,
+                          'Mock interview preparation',
+                        ),
+                      ],
                     ),
                   ),
-                  if (_referralResult?.valid == true) ...[
-                    const SizedBox(height: 6),
-                    Text(
-                      'Referred by ${_referralResult!.referrerName}',
-                      style: const TextStyle(
-                        color: Colors.green,
-                        fontSize: 12,
-                        fontWeight: FontWeight.w600,
+                  Expanded(
+                    flex: 6,
+                    child: SafeArea(
+                      child: Center(
+                        child: ConstrainedBox(
+                          constraints: const BoxConstraints(maxWidth: 460),
+                          child: SingleChildScrollView(
+                            padding: const EdgeInsets.symmetric(
+                              vertical: 16,
+                              horizontal: 8,
+                            ),
+                            child: _buildFormColumn(authState, isWide: true),
+                          ),
+                        ),
                       ),
                     ),
-                  ],
+                  ),
                 ],
               ),
-            ),
-            const SizedBox(height: 20),
+            );
+          }
 
-            // ── Submit ────────────────────────────────────────
-            SizedBox(
-              width: double.infinity,
-              height: 50,
-              child: ElevatedButton(
-                onPressed: authState.isLoading || authState.isGoogleLoading
-                    ? null
-                    : _register,
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: AppTheme.primary,
-                  foregroundColor: Colors.white,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                ),
-                child: authState.isLoading
-                    ? const SizedBox(
-                        height: 20,
-                        width: 20,
-                        child: CircularProgressIndicator(
-                          color: Colors.white,
-                          strokeWidth: 2,
-                        ),
-                      )
-                    : const Text(
-                        'Create Account',
-                        style: TextStyle(
-                          fontSize: 15,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-              ),
+          // ── Narrow (mobile): single column, compact lockup header ──
+          return SafeArea(
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.fromLTRB(24, 0, 24, 24),
+              child: _buildFormColumn(authState, isWide: false),
             ),
-
-            if (authState.error != null) ...[
-              const SizedBox(height: 12),
-              AuthErrorBanner(authState.error!),
-            ],
-
-            const SizedBox(height: 20),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Text(
-                  'Already have an account? ',
-                  style: TextStyle(color: Colors.grey[600], fontSize: 14),
-                ),
-                GestureDetector(
-                  onTap: () => context.go(AppRoutes.login),
-                  child: Text(
-                    'Sign in',
-                    style: TextStyle(
-                      color: AppTheme.primary,
-                      fontWeight: FontWeight.w600,
-                      fontSize: 14,
-                    ),
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 40),
-          ],
-        ),
+          );
+        },
       ),
     );
   }
+
+  Widget _buildFormColumn(
+    AuthState authState, {
+    required bool isWide,
+  }) => Column(
+    crossAxisAlignment: CrossAxisAlignment.start,
+    children: [
+      if (!isWide) ...[const BrandLockup(), const SizedBox(height: 28)],
+
+      const Text(
+        'Create your account',
+        style: TextStyle(
+          fontSize: 26,
+          fontWeight: FontWeight.w700,
+          letterSpacing: -0.4,
+        ),
+      ),
+      const SizedBox(height: 6),
+      Text(
+        'Start building resumes that get past the ATS.',
+        style: TextStyle(fontSize: 14.5, color: Colors.grey[600], height: 1.4),
+      ),
+      const SizedBox(height: 24),
+
+      // ── Google Sign-Up (fastest path) ─────────────────
+      const Text(
+        'Quickest way to get started:',
+        style: TextStyle(fontSize: 13, color: Colors.grey),
+      ),
+      const SizedBox(height: 10),
+      GoogleSignInButton(
+        isLoading: authState.isGoogleLoading,
+        onTap: authState.isGoogleLoading || authState.isLoading
+            ? null
+            : _googleSignIn,
+      ),
+      const SizedBox(height: 20),
+
+      // ── Divider ───────────────────────────────────────
+      Row(
+        children: [
+          const Expanded(child: Divider()),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 12),
+            child: Text(
+              'or register with email',
+              style: TextStyle(color: Colors.grey[500], fontSize: 12),
+            ),
+          ),
+          const Expanded(child: Divider()),
+        ],
+      ),
+      const SizedBox(height: 20),
+
+      // ── Email form ────────────────────────────────────
+      Form(
+        key: _formKey,
+        child: Column(
+          children: [
+            TextFormField(
+              controller: _nameCtrl,
+              textCapitalization: TextCapitalization.words,
+              decoration: const InputDecoration(
+                labelText: 'Full name',
+                prefixIcon: Icon(Icons.person_outline),
+              ),
+              validator: (v) =>
+                  v == null || v.trim().isEmpty ? 'Enter your name' : null,
+            ),
+            const SizedBox(height: 14),
+            TextFormField(
+              controller: _emailCtrl,
+              keyboardType: TextInputType.emailAddress,
+              decoration: const InputDecoration(
+                labelText: 'Email address',
+                prefixIcon: Icon(Icons.email_outlined),
+              ),
+              validator: (v) =>
+                  v == null || !v.contains('@') ? 'Enter a valid email' : null,
+            ),
+            const SizedBox(height: 14),
+            TextFormField(
+              controller: _passwordCtrl,
+              obscureText: _obscure,
+              decoration: InputDecoration(
+                labelText: 'Password',
+                prefixIcon: const Icon(Icons.lock_outline),
+                suffixIcon: IconButton(
+                  icon: Icon(
+                    _obscure
+                        ? Icons.visibility_outlined
+                        : Icons.visibility_off_outlined,
+                  ),
+                  onPressed: () => setState(() => _obscure = !_obscure),
+                ),
+              ),
+              validator: (v) =>
+                  v == null || v.length < 6 ? 'Minimum 6 characters' : null,
+            ),
+            const SizedBox(height: 14),
+            TextFormField(
+              controller: _referralCtrl,
+              textCapitalization: TextCapitalization.characters,
+              onChanged: _onReferralChanged,
+              decoration: InputDecoration(
+                labelText: 'Referral code (optional)',
+                prefixIcon: const Icon(Icons.card_giftcard_outlined),
+                suffixIcon: _referralChecking
+                    ? const Padding(
+                        padding: EdgeInsets.all(14),
+                        child: SizedBox(
+                          height: 16,
+                          width: 16,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        ),
+                      )
+                    : (_referralResult?.valid == true
+                          ? const Icon(Icons.check_circle, color: Colors.green)
+                          : null),
+                helperText: _referralFromLink
+                    ? 'Applied from your invite link'
+                    : 'Have a friend\'s code? Enter it for a launch discount.',
+                errorText: (_referralResult != null && !_referralResult!.valid)
+                    ? _referralResult!.error
+                    : null,
+              ),
+            ),
+            if (_referralResult?.valid == true) ...[
+              const SizedBox(height: 6),
+              Text(
+                'Referred by ${_referralResult!.referrerName}',
+                style: const TextStyle(
+                  color: Colors.green,
+                  fontSize: 12,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ],
+          ],
+        ),
+      ),
+      const SizedBox(height: 20),
+
+      // ── Submit ────────────────────────────────────────
+      SizedBox(
+        width: double.infinity,
+        height: 50,
+        child: ElevatedButton(
+          onPressed: authState.isLoading || authState.isGoogleLoading
+              ? null
+              : _register,
+          style: ElevatedButton.styleFrom(
+            backgroundColor: AppTheme.primary,
+            foregroundColor: Colors.white,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(12),
+            ),
+          ),
+          child: authState.isLoading
+              ? const SizedBox(
+                  height: 20,
+                  width: 20,
+                  child: CircularProgressIndicator(
+                    color: Colors.white,
+                    strokeWidth: 2,
+                  ),
+                )
+              : const Text(
+                  'Create Account',
+                  style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600),
+                ),
+        ),
+      ),
+
+      if (authState.error != null) ...[
+        const SizedBox(height: 12),
+        AuthErrorBanner(authState.error!),
+      ],
+
+      const SizedBox(height: 20),
+      Row(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Text(
+            'Already have an account? ',
+            style: TextStyle(color: Colors.grey[600], fontSize: 14),
+          ),
+          GestureDetector(
+            onTap: () => context.go(AppRoutes.login),
+            child: Text(
+              'Sign in',
+              style: TextStyle(
+                color: AppTheme.primary,
+                fontWeight: FontWeight.w600,
+                fontSize: 14,
+              ),
+            ),
+          ),
+        ],
+      ),
+      SizedBox(height: isWide ? 8 : 40),
+    ],
+  );
 }
 
 // ─── Alias kept for any existing router references ─────────────────────────

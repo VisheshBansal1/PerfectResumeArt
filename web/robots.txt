@@ -1,0 +1,80 @@
+# =============================================================
+# robots.txt — Perfect Resume Art (perfectresumeart.in)
+# =============================================================
+
+User-agent: *
+Allow: /
+Disallow: /admin
+Disallow: /admin/
+Disallow: /home
+Disallow: /upload-resume
+Disallow: /interview-prep
+Disallow: /jd-keyword-match
+Disallow: /progress
+Disallow: /profile
+Disallow: /job-selection
+Disallow: /earn-refer
+Disallow: /analysis/
+# These routes still require login (see app_router.dart's isPublicRoute) —
+# for an anonymous crawler they resolve to /login, so there's no unique
+# content to index there and no reason to spend crawl budget on them.
+# /about, /contact, /ats-checker, /free-resume-check, /login, /register are
+# intentionally NOT disallowed — they're real public content now.
+
+User-agent: Googlebot
+Allow: /
+
+User-agent: Bingbot
+Allow: /
+
+User-agent: DuckDuckBot
+Allow: /
+
+# ---- AI answer-engines: retrieval / on-demand fetch bots ----
+# Fetch a page live when someone asks ChatGPT/Claude/Perplexity/Gemini a
+# question. Allowing these is what makes AI-search visibility possible.
+User-agent: OAI-SearchBot
+Allow: /
+
+User-agent: ChatGPT-User
+Allow: /
+
+User-agent: PerplexityBot
+Allow: /
+
+User-agent: Perplexity-User
+Allow: /
+
+User-agent: ClaudeBot
+Allow: /
+
+User-agent: Claude-SearchBot
+Allow: /
+
+User-agent: Claude-User
+Allow: /
+
+User-agent: Applebot-Extended
+Allow: /
+
+# ---- AI model-training crawlers ----
+# Scrape into training data rather than answering a live query. Allowed by
+# default here since the goal is AI-search visibility; block any of these
+# individually later if you'd rather your copy not be used for training.
+User-agent: GPTBot
+Allow: /
+
+User-agent: Google-Extended
+Allow: /
+
+User-agent: CCBot
+Allow: /
+
+User-agent: Meta-ExternalAgent
+Allow: /
+
+# ---- Known non-compliant scraper ----
+User-agent: Bytespider
+Disallow: /
+
+Sitemap: https://perfectresumeart.in/sitemap.xml

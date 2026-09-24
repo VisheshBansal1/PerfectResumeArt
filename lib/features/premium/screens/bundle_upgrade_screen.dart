@@ -50,13 +50,18 @@ class _BundleUpgradeScreenState extends ConsumerState<BundleUpgradeScreen> {
   }
 
   Future<void> _handlePurchase() async {
-    final paid = await PaywallSheet.show(
+    // The bundle permanently unlocks every paid feature at once — including
+    // human_review, which a real person manually fulfills — so it's
+    // excluded from the rewarded-ad path. Ads only ever grant one-time use
+    // of a single feature, never a standing free unlock like this.
+    final result = await PaywallSheet.show(
       context,
       plan: PaymentPlan.bundle,
       userEmail: widget.userEmail,
       userName: widget.userName,
+      allowAdUnlock: false,
     );
-    if (paid && mounted) {
+    if (result == PaywallResult.purchased && mounted) {
       _unlockAllFeatures();
       setState(() => _unlocked = true);
     }

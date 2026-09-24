@@ -2,9 +2,11 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:share_plus/share_plus.dart';
 
+import '../../../core/constants/app_constants.dart';
 import '../../../core/constants/app_theme.dart';
 import '../../../core/services/analytics_service.dart';
 import '../../../core/services/jd_match_service.dart';
+import '../../../core/services/referral_service.dart';
 import '../../auth/providers/auth_provider.dart';
 import '../../../models/models.dart';
 import '../../../providers/providers.dart';
@@ -24,7 +26,8 @@ class JdKeywordMatchScreen extends ConsumerStatefulWidget {
   const JdKeywordMatchScreen({super.key});
 
   @override
-  ConsumerState<JdKeywordMatchScreen> createState() => _JdKeywordMatchScreenState();
+  ConsumerState<JdKeywordMatchScreen> createState() =>
+      _JdKeywordMatchScreenState();
 }
 
 class _JdKeywordMatchScreenState extends ConsumerState<JdKeywordMatchScreen> {
@@ -49,14 +52,20 @@ class _JdKeywordMatchScreenState extends ConsumerState<JdKeywordMatchScreen> {
     if (resumeText.trim().length < 80) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('Add your resume text first — paste it below, or load one from the ATS Checker.'),
+          content: Text(
+            'Add your resume text first — paste it below, or load one from the ATS Checker.',
+          ),
         ),
       );
       return;
     }
     if (_jdController.text.trim().length < 40) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Paste a fuller job description — a line or two is too short to compare.')),
+        const SnackBar(
+          content: Text(
+            'Paste a fuller job description — a line or two is too short to compare.',
+          ),
+        ),
       );
       return;
     }
@@ -69,11 +78,23 @@ class _JdKeywordMatchScreenState extends ConsumerState<JdKeywordMatchScreen> {
   void _shareResult() {
     final r = _result;
     if (r == null) return;
-    Share.share(
+
+    final code = ref.read(currentUserProvider).value?.referralCode;
+    final message = StringBuffer(
       'I checked my resume against a job description with Perfect Resume Art and scored '
       '${r.matchPercent}% keyword match — free, instant, no signup needed for the first look. '
-      'Worth checking yours before you apply.',
+      'Worth checking yours before you apply. 🚀\n\n',
     );
+    if (code != null && code.isNotEmpty) {
+      message.write(
+        'Use my code $code and get ${AppConstants.defaultReferralDiscountPercent}% off '
+        'your first premium purchase 🎉\n'
+        '${ReferralService().referralLink(code)}',
+      );
+    } else {
+      message.write('https://perfectresumeart.netlify.app');
+    }
+    Share.share(message.toString());
   }
 
   void _openJdOptimize(ResumeContext ctx, UserModel? user) {
@@ -106,11 +127,17 @@ class _JdKeywordMatchScreenState extends ConsumerState<JdKeywordMatchScreen> {
             const SizedBox(height: 16),
             _buildIntro(),
             const SizedBox(height: 24),
-            const Text('1. Your resume', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700)),
+            const Text(
+              '1. Your resume',
+              style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700),
+            ),
             const SizedBox(height: 10),
             _buildResumeSource(ctx),
             const SizedBox(height: 22),
-            const Text('2. Paste the job description', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700)),
+            const Text(
+              '2. Paste the job description',
+              style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700),
+            ),
             const SizedBox(height: 10),
             _buildJdInput(),
             const SizedBox(height: 20),
@@ -154,7 +181,11 @@ class _JdKeywordMatchScreenState extends ConsumerState<JdKeywordMatchScreen> {
             children: [
               Text(
                 'JD Keyword Match',
-                style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.w700),
+                style: TextStyle(
+                  color: Colors.white,
+                  fontSize: 16,
+                  fontWeight: FontWeight.w700,
+                ),
               ),
               SizedBox(height: 4),
               Text(
@@ -185,7 +216,11 @@ class _JdKeywordMatchScreenState extends ConsumerState<JdKeywordMatchScreen> {
             'Most ATS software ranks candidates by how many keywords from the job posting show up '
             'in the resume. Paste any job description below — from anywhere — and see your match '
             'instantly. Free and unlimited, no AI call needed.',
-            style: TextStyle(fontSize: 12.5, color: AppTheme.textSecondary, height: 1.5),
+            style: TextStyle(
+              fontSize: 12.5,
+              color: AppTheme.textSecondary,
+              height: 1.5,
+            ),
           ),
         ),
       ],
@@ -239,9 +274,14 @@ class _JdKeywordMatchScreenState extends ConsumerState<JdKeywordMatchScreen> {
       decoration: InputDecoration(
         border: InputBorder.none,
         contentPadding: const EdgeInsets.all(14),
-        hintText: 'Paste the full job posting here — from LinkedIn, a company site, anywhere. '
+        hintText:
+            'Paste the full job posting here — from LinkedIn, a company site, anywhere. '
             'The more complete it is, the more accurate your match score.',
-        hintStyle: TextStyle(fontSize: 12.5, color: AppTheme.textSecondary, height: 1.4),
+        hintStyle: TextStyle(
+          fontSize: 12.5,
+          color: AppTheme.textSecondary,
+          height: 1.4,
+        ),
       ),
     ),
   );
@@ -256,11 +296,18 @@ class _JdKeywordMatchScreenState extends ConsumerState<JdKeywordMatchScreen> {
         padding: const EdgeInsets.symmetric(vertical: 14),
       ),
       icon: const Icon(Icons.bolt_outlined),
-      label: const Text('Check My Match', style: TextStyle(fontWeight: FontWeight.w700)),
+      label: const Text(
+        'Check My Match',
+        style: TextStyle(fontWeight: FontWeight.w700),
+      ),
     ),
   );
 
-  Widget _buildResults(JdMatchResult result, ResumeContext ctx, UserModel? user) {
+  Widget _buildResults(
+    JdMatchResult result,
+    ResumeContext ctx,
+    UserModel? user,
+  ) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -271,6 +318,7 @@ class _JdKeywordMatchScreenState extends ConsumerState<JdKeywordMatchScreen> {
             color: AppTheme.primary.withOpacity(0.04),
             borderRadius: BorderRadius.circular(14),
             border: Border.all(color: AppTheme.primary.withOpacity(0.15)),
+            boxShadow: AppTheme.elevation(context, strength: 0.4),
           ),
           child: Row(
             children: [
@@ -282,20 +330,32 @@ class _JdKeywordMatchScreenState extends ConsumerState<JdKeywordMatchScreen> {
                   children: [
                     Text(
                       result.verdict,
-                      style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 14),
+                      style: const TextStyle(
+                        fontWeight: FontWeight.w700,
+                        fontSize: 14,
+                      ),
                     ),
                     const SizedBox(height: 6),
                     Text(
                       '${result.matched.length} of ${result.totalKeywords} keywords found in your resume',
-                      style: TextStyle(fontSize: 12, color: AppTheme.textSecondary),
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: AppTheme.textSecondary,
+                      ),
                     ),
                     const SizedBox(height: 12),
                     OutlinedButton.icon(
                       onPressed: _shareResult,
                       icon: const Icon(Icons.ios_share, size: 15),
-                      label: const Text('Share', style: TextStyle(fontSize: 12)),
+                      label: const Text(
+                        'Share',
+                        style: TextStyle(fontSize: 12),
+                      ),
                       style: OutlinedButton.styleFrom(
-                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 12,
+                          vertical: 6,
+                        ),
                         minimumSize: Size.zero,
                         tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                       ),
@@ -310,7 +370,8 @@ class _JdKeywordMatchScreenState extends ConsumerState<JdKeywordMatchScreen> {
         if (result.missingCritical.isNotEmpty) ...[
           _KeywordGroup(
             title: 'Add these first — core requirements',
-            subtitle: 'Explicitly called for in the posting and missing from your resume',
+            subtitle:
+                'Explicitly called for in the posting and missing from your resume',
             color: AppTheme.error,
             keywords: result.missingCritical,
           ),
@@ -345,12 +406,16 @@ class _JdKeywordMatchScreenState extends ConsumerState<JdKeywordMatchScreen> {
         ],
         InkWell(
           borderRadius: BorderRadius.circular(14),
-          onTap: _resolvedResumeText(ctx).trim().length >= 80 ? () => _openJdOptimize(ctx, user) : null,
+          onTap: _resolvedResumeText(ctx).trim().length >= 80
+              ? () => _openJdOptimize(ctx, user)
+              : null,
           child: Container(
             width: double.infinity,
             padding: const EdgeInsets.all(16),
             decoration: BoxDecoration(
-              gradient: const LinearGradient(colors: [Color(0xFF7C3AED), Color(0xFF5B21B6)]),
+              gradient: const LinearGradient(
+                colors: [Color(0xFF7C3AED), Color(0xFF5B21B6)],
+              ),
               borderRadius: BorderRadius.circular(14),
             ),
             child: Row(
@@ -362,7 +427,11 @@ class _JdKeywordMatchScreenState extends ConsumerState<JdKeywordMatchScreen> {
                     color: Colors.white.withOpacity(0.18),
                     borderRadius: BorderRadius.circular(11),
                   ),
-                  child: const Icon(Icons.auto_fix_high, color: Colors.white, size: 22),
+                  child: const Icon(
+                    Icons.auto_fix_high,
+                    color: Colors.white,
+                    size: 22,
+                  ),
                 ),
                 const SizedBox(width: 12),
                 const Expanded(
@@ -371,7 +440,11 @@ class _JdKeywordMatchScreenState extends ConsumerState<JdKeywordMatchScreen> {
                     children: [
                       Text(
                         'Want these woven in for you?',
-                        style: TextStyle(color: Colors.white, fontWeight: FontWeight.w700, fontSize: 13),
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontWeight: FontWeight.w700,
+                          fontSize: 13,
+                        ),
                       ),
                       SizedBox(height: 2),
                       Text(
@@ -381,7 +454,11 @@ class _JdKeywordMatchScreenState extends ConsumerState<JdKeywordMatchScreen> {
                     ],
                   ),
                 ),
-                const Icon(Icons.arrow_forward_ios, color: Colors.white70, size: 14),
+                const Icon(
+                  Icons.arrow_forward_ios,
+                  color: Colors.white70,
+                  size: 14,
+                ),
               ],
             ),
           ),
@@ -411,9 +488,15 @@ class _KeywordGroup extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(title, style: const TextStyle(fontSize: 13.5, fontWeight: FontWeight.w700)),
+        Text(
+          title,
+          style: const TextStyle(fontSize: 13.5, fontWeight: FontWeight.w700),
+        ),
         const SizedBox(height: 2),
-        Text(subtitle, style: TextStyle(fontSize: 11.5, color: AppTheme.textSecondary)),
+        Text(
+          subtitle,
+          style: TextStyle(fontSize: 11.5, color: AppTheme.textSecondary),
+        ),
         const SizedBox(height: 10),
         Wrap(
           spacing: 8,
@@ -421,7 +504,10 @@ class _KeywordGroup extends StatelessWidget {
           children: keywords
               .map(
                 (k) => Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 7),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 11,
+                    vertical: 7,
+                  ),
                   decoration: BoxDecoration(
                     color: color.withOpacity(0.1),
                     borderRadius: BorderRadius.circular(20),
@@ -429,7 +515,11 @@ class _KeywordGroup extends StatelessWidget {
                   ),
                   child: Text(
                     k.term,
-                    style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: color),
+                    style: TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                      color: color,
+                    ),
                   ),
                 ),
               )

@@ -29,6 +29,14 @@ class AppConstants {
   // Referral Program — Phase 4 (withdrawals, not wired yet)
   static const String withdrawalRequestsCollection = 'withdrawal_requests';
 
+  // Referral Program — fallback discount shown in share/promo copy on
+  // screens that don't load the live wallet summary (so they don't need an
+  // extra network call just to render a share button). Keep this in sync
+  // with DEFAULT_CONFIG.discountPercent in the backend's referralEngine.js —
+  // it's only a display fallback; the real number is always enforced
+  // server-side at checkout.
+  static const int defaultReferralDiscountPercent = 10;
+
   // Storage Paths
   static const String resumeStoragePath = 'resumes';
 

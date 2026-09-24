@@ -1,0 +1,24 @@
+/* TEAM */
+Developer: EnquSoft
+Contact: enqusoft [at] gmail.com
+From: India
+
+/* PRODUCT */
+Product: Perfect Resume Art
+URL: https://perfectresumeart.in
+Description: AI-powered resume analyzer — ATS scoring, job-description
+keyword matching, AI resume building, AI-guided fixes, human expert
+review, and an AI job finder.
+
+/* SITE */
+Last update: 2026/08/04
+Language: English
+Doctype: HTML5
+
+/* TECHNOLOGY COLOPHON */
+Frontend: Flutter Web, Dart, Riverpod, go_router
+Backend: Node.js, Express (Render)
+Database / Auth / Storage: Firebase (Firestore, Authentication, Storage)
+AI: Groq (llama-3.3-70b-versatile, llama-3.1-8b-instant), proxied server-side
+Payments: Razorpay
+Hosting: Netlify, custom domain perfectresumeart.in

@@ -16,10 +16,12 @@ class ReferralAdminScreen extends ConsumerStatefulWidget {
   const ReferralAdminScreen({super.key});
 
   @override
-  ConsumerState<ReferralAdminScreen> createState() => _ReferralAdminScreenState();
+  ConsumerState<ReferralAdminScreen> createState() =>
+      _ReferralAdminScreenState();
 }
 
-class _ReferralAdminScreenState extends ConsumerState<ReferralAdminScreen> with SingleTickerProviderStateMixin {
+class _ReferralAdminScreenState extends ConsumerState<ReferralAdminScreen>
+    with SingleTickerProviderStateMixin {
   late final TabController _tabController;
 
   @override
@@ -36,7 +38,9 @@ class _ReferralAdminScreenState extends ConsumerState<ReferralAdminScreen> with 
 
   @override
   Widget build(BuildContext context) {
-    final user = ref.watch(currentUserProvider).maybeWhen(data: (u) => u, orElse: () => null);
+    final user = ref
+        .watch(currentUserProvider)
+        .maybeWhen(data: (u) => u, orElse: () => null);
 
     // The backend independently enforces role == 'admin' on every single
     // request this screen makes — this check is just so a non-admin who
@@ -64,11 +68,7 @@ class _ReferralAdminScreenState extends ConsumerState<ReferralAdminScreen> with 
       ),
       body: TabBarView(
         controller: _tabController,
-        children: const [
-          _ConfigTab(),
-          _AnalyticsTab(),
-          _WithdrawalsTab(),
-        ],
+        children: const [_ConfigTab(), _AnalyticsTab(), _WithdrawalsTab()],
       ),
     );
   }
@@ -125,7 +125,8 @@ class _ConfigTabState extends State<_ConfigTab> {
         _commissionCtrl.text = config.commissionPercent.toString();
         _minWithdrawalCtrl.text = config.minWithdrawal.toString();
         _holdDaysCtrl.text = config.holdDays.toString();
-        _maxCommissionCtrl.text = config.maxCommissionPerReferral?.toString() ?? '';
+        _maxCommissionCtrl.text =
+            config.maxCommissionPerReferral?.toString() ?? '';
       }
     });
   }
@@ -147,9 +148,9 @@ class _ConfigTabState extends State<_ConfigTab> {
     if (!mounted) return;
     setState(() => _saving = false);
 
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(error ?? 'Campaign settings saved')),
-    );
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text(error ?? 'Campaign settings saved')));
     if (error == null) _load();
   }
 
@@ -181,10 +182,26 @@ class _ConfigTabState extends State<_ConfigTab> {
         ),
         const Divider(),
         const SizedBox(height: 8),
-        _NumberField(label: 'Discount Percent (%)', controller: _discountCtrl, hint: 'e.g. 10'),
-        _NumberField(label: 'Commission Percent (%)', controller: _commissionCtrl, hint: 'e.g. 20'),
-        _NumberField(label: 'Minimum Withdrawal (\u20b9)', controller: _minWithdrawalCtrl, hint: 'e.g. 500'),
-        _NumberField(label: 'Commission Hold (days)', controller: _holdDaysCtrl, hint: 'e.g. 7'),
+        _NumberField(
+          label: 'Discount Percent (%)',
+          controller: _discountCtrl,
+          hint: 'e.g. 10',
+        ),
+        _NumberField(
+          label: 'Commission Percent (%)',
+          controller: _commissionCtrl,
+          hint: 'e.g. 20',
+        ),
+        _NumberField(
+          label: 'Minimum Withdrawal (\u20b9)',
+          controller: _minWithdrawalCtrl,
+          hint: 'e.g. 500',
+        ),
+        _NumberField(
+          label: 'Commission Hold (days)',
+          controller: _holdDaysCtrl,
+          hint: 'e.g. 7',
+        ),
         _NumberField(
           label: 'Max Commission Per Referral (\u20b9, optional)',
           controller: _maxCommissionCtrl,
@@ -195,9 +212,19 @@ class _ConfigTabState extends State<_ConfigTab> {
           width: double.infinity,
           child: ElevatedButton(
             onPressed: _saving ? null : _save,
-            style: ElevatedButton.styleFrom(backgroundColor: AppTheme.primary, foregroundColor: Colors.white),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppTheme.primary,
+              foregroundColor: Colors.white,
+            ),
             child: _saving
-                ? const SizedBox(height: 18, width: 18, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                ? const SizedBox(
+                    height: 18,
+                    width: 18,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2,
+                      color: Colors.white,
+                    ),
+                  )
                 : const Text('Save Changes'),
           ),
         ),
@@ -210,7 +237,11 @@ class _NumberField extends StatelessWidget {
   final String label;
   final TextEditingController controller;
   final String hint;
-  const _NumberField({required this.label, required this.controller, required this.hint});
+  const _NumberField({
+    required this.label,
+    required this.controller,
+    required this.hint,
+  });
 
   @override
   Widget build(BuildContext context) => Padding(
@@ -277,13 +308,48 @@ class _AnalyticsTabState extends State<_AnalyticsTab> {
     }
 
     final stats = <(String, String, IconData, Color)>[
-      ('Referral Clicks', '${a.totalReferralClicks}', Icons.link_rounded, AppTheme.primary),
-      ('Total Signups', '${a.totalSignups}', Icons.person_add_alt_1_rounded, AppTheme.accent),
-      ('First Purchases', '${a.totalFirstPurchases}', Icons.shopping_bag_rounded, AppTheme.success),
-      ('Conversion Rate', '${a.conversionRatePercent.toStringAsFixed(1)}%', Icons.trending_up_rounded, AppTheme.warning),
-      ('Commissions Paid', _money(a.totalCommissionsPaid), Icons.payments_rounded, AppTheme.primary),
-      ('Discounts Given', _money(a.totalDiscountsGiven), Icons.local_offer_rounded, AppTheme.accent),
-      ('Referral Revenue', _money(a.referralGeneratedRevenue), Icons.attach_money_rounded, AppTheme.success),
+      (
+        'Referral Clicks',
+        '${a.totalReferralClicks}',
+        Icons.link_rounded,
+        AppTheme.primary,
+      ),
+      (
+        'Total Signups',
+        '${a.totalSignups}',
+        Icons.person_add_alt_1_rounded,
+        AppTheme.accent,
+      ),
+      (
+        'First Purchases',
+        '${a.totalFirstPurchases}',
+        Icons.shopping_bag_rounded,
+        AppTheme.success,
+      ),
+      (
+        'Conversion Rate',
+        '${a.conversionRatePercent.toStringAsFixed(1)}%',
+        Icons.trending_up_rounded,
+        AppTheme.warning,
+      ),
+      (
+        'Commissions Paid',
+        _money(a.totalCommissionsPaid),
+        Icons.payments_rounded,
+        AppTheme.primary,
+      ),
+      (
+        'Discounts Given',
+        _money(a.totalDiscountsGiven),
+        Icons.local_offer_rounded,
+        AppTheme.accent,
+      ),
+      (
+        'Referral Revenue',
+        _money(a.referralGeneratedRevenue),
+        Icons.attach_money_rounded,
+        AppTheme.success,
+      ),
     ];
 
     return RefreshIndicator(
@@ -298,7 +364,16 @@ class _AnalyticsTabState extends State<_AnalyticsTab> {
             mainAxisSpacing: 12,
             crossAxisSpacing: 12,
             childAspectRatio: 1.5,
-            children: stats.map((s) => _AdminStatCard(label: s.$1, value: s.$2, icon: s.$3, color: s.$4)).toList(),
+            children: stats
+                .map(
+                  (s) => _AdminStatCard(
+                    label: s.$1,
+                    value: s.$2,
+                    icon: s.$3,
+                    color: s.$4,
+                  ),
+                )
+                .toList(),
           ),
           const SizedBox(height: 16),
           Row(
@@ -321,12 +396,18 @@ class _AnalyticsTabState extends State<_AnalyticsTab> {
             ],
           ),
           const SizedBox(height: 20),
-          const Text('Top Referrers', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700)),
+          const Text(
+            'Top Referrers',
+            style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
+          ),
           const SizedBox(height: 10),
           if (a.topReferrers.isEmpty)
             const Padding(
               padding: EdgeInsets.symmetric(vertical: 20),
-              child: Text('No referrers yet', style: TextStyle(color: AppTheme.textSecondary)),
+              child: Text(
+                'No referrers yet',
+                style: TextStyle(color: AppTheme.textSecondary),
+              ),
             )
           else
             ...a.topReferrers.asMap().entries.map((entry) {
@@ -345,19 +426,44 @@ class _AnalyticsTabState extends State<_AnalyticsTab> {
                     CircleAvatar(
                       radius: 14,
                       backgroundColor: AppTheme.primary.withOpacity(0.1),
-                      child: Text('${i + 1}', style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: AppTheme.primary)),
+                      child: Text(
+                        '${i + 1}',
+                        style: const TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w700,
+                          color: AppTheme.primary,
+                        ),
+                      ),
                     ),
                     const SizedBox(width: 12),
                     Expanded(
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Text(r.name, style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14)),
-                          Text('${r.totalReferrals} referrals', style: const TextStyle(fontSize: 12, color: AppTheme.textSecondary)),
+                          Text(
+                            r.name,
+                            style: const TextStyle(
+                              fontWeight: FontWeight.w600,
+                              fontSize: 14,
+                            ),
+                          ),
+                          Text(
+                            '${r.totalReferrals} referrals',
+                            style: const TextStyle(
+                              fontSize: 12,
+                              color: AppTheme.textSecondary,
+                            ),
+                          ),
                         ],
                       ),
                     ),
-                    Text(_money(r.lifetimeEarnings), style: const TextStyle(fontWeight: FontWeight.w700, color: AppTheme.success)),
+                    Text(
+                      _money(r.lifetimeEarnings),
+                      style: const TextStyle(
+                        fontWeight: FontWeight.w700,
+                        color: AppTheme.success,
+                      ),
+                    ),
                   ],
                 ),
               );
@@ -372,7 +478,12 @@ class _AdminStatCard extends StatelessWidget {
   final String label, value;
   final IconData icon;
   final Color color;
-  const _AdminStatCard({required this.label, required this.value, required this.icon, required this.color});
+  const _AdminStatCard({
+    required this.label,
+    required this.value,
+    required this.icon,
+    required this.color,
+  });
 
   @override
   Widget build(BuildContext context) => Container(
@@ -388,8 +499,14 @@ class _AdminStatCard extends StatelessWidget {
       children: [
         Icon(icon, size: 18, color: color),
         const SizedBox(height: 8),
-        Text(value, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w800)),
-        Text(label, style: const TextStyle(fontSize: 11.5, color: AppTheme.textSecondary)),
+        Text(
+          value,
+          style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w800),
+        ),
+        Text(
+          label,
+          style: const TextStyle(fontSize: 11.5, color: AppTheme.textSecondary),
+        ),
       ],
     ),
   );
@@ -399,7 +516,11 @@ class _WithdrawalSummaryCard extends StatelessWidget {
   final String title;
   final WithdrawalSummary summary;
   final Color color;
-  const _WithdrawalSummaryCard({required this.title, required this.summary, required this.color});
+  const _WithdrawalSummaryCard({
+    required this.title,
+    required this.summary,
+    required this.color,
+  });
 
   @override
   Widget build(BuildContext context) => Container(
@@ -412,10 +533,23 @@ class _WithdrawalSummaryCard extends StatelessWidget {
     child: Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(title, style: const TextStyle(fontSize: 11.5, color: AppTheme.textSecondary)),
+        Text(
+          title,
+          style: const TextStyle(fontSize: 11.5, color: AppTheme.textSecondary),
+        ),
         const SizedBox(height: 6),
-        Text('\u20b9${summary.total.toStringAsFixed(2)}', style: TextStyle(fontSize: 17, fontWeight: FontWeight.w800, color: color)),
-        Text('${summary.count} request${summary.count == 1 ? '' : 's'}', style: const TextStyle(fontSize: 11.5, color: AppTheme.textSecondary)),
+        Text(
+          '\u20b9${summary.total.toStringAsFixed(2)}',
+          style: TextStyle(
+            fontSize: 17,
+            fontWeight: FontWeight.w800,
+            color: color,
+          ),
+        ),
+        Text(
+          '${summary.count} request${summary.count == 1 ? '' : 's'}',
+          style: const TextStyle(fontSize: 11.5, color: AppTheme.textSecondary),
+        ),
       ],
     ),
   );
@@ -459,7 +593,12 @@ class _WithdrawalsTabState extends State<_WithdrawalsTab> {
     if (!mounted) return;
     setState(() => _processingIds.remove(r.id));
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(error ?? 'Approved \u20b9${r.requestedAmount.toStringAsFixed(2)} for ${r.name}')),
+      SnackBar(
+        content: Text(
+          error ??
+              'Approved \u20b9${r.requestedAmount.toStringAsFixed(2)} for ${r.name}',
+        ),
+      ),
     );
     if (error == null) _load();
   }
@@ -473,11 +612,17 @@ class _WithdrawalsTabState extends State<_WithdrawalsTab> {
           title: const Text('Reject Withdrawal'),
           content: TextField(
             controller: ctrl,
-            decoration: const InputDecoration(labelText: 'Reason (optional)', border: OutlineInputBorder()),
+            decoration: const InputDecoration(
+              labelText: 'Reason (optional)',
+              border: OutlineInputBorder(),
+            ),
             maxLines: 2,
           ),
           actions: [
-            TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('Cancel'),
+            ),
             ElevatedButton(
               style: ElevatedButton.styleFrom(backgroundColor: AppTheme.error),
               onPressed: () => Navigator.pop(context, ctrl.text),
@@ -522,81 +667,119 @@ class _WithdrawalsTabState extends State<_WithdrawalsTab> {
           child: _loading
               ? const Center(child: CircularProgressIndicator())
               : _requests.isEmpty
-                  ? Center(
-                      child: Text('No $_status withdrawal requests', style: const TextStyle(color: AppTheme.textSecondary)),
-                    )
-                  : RefreshIndicator(
-                      onRefresh: _load,
-                      child: ListView.builder(
-                        padding: const EdgeInsets.symmetric(horizontal: 16),
-                        itemCount: _requests.length,
-                        itemBuilder: (context, i) {
-                          final r = _requests[i];
-                          final processing = _processingIds.contains(r.id);
-                          return Container(
-                            margin: const EdgeInsets.only(bottom: 10),
-                            padding: const EdgeInsets.all(14),
-                            decoration: BoxDecoration(
-                              color: AppTheme.cardLight,
-                              borderRadius: BorderRadius.circular(14),
-                              border: Border.all(color: AppTheme.borderLight),
-                            ),
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
+              ? Center(
+                  child: Text(
+                    'No $_status withdrawal requests',
+                    style: const TextStyle(color: AppTheme.textSecondary),
+                  ),
+                )
+              : RefreshIndicator(
+                  onRefresh: _load,
+                  child: ListView.builder(
+                    padding: const EdgeInsets.symmetric(horizontal: 16),
+                    itemCount: _requests.length,
+                    itemBuilder: (context, i) {
+                      final r = _requests[i];
+                      final processing = _processingIds.contains(r.id);
+                      return Container(
+                        margin: const EdgeInsets.only(bottom: 10),
+                        padding: const EdgeInsets.all(14),
+                        decoration: BoxDecoration(
+                          color: AppTheme.cardLight,
+                          borderRadius: BorderRadius.circular(14),
+                          border: Border.all(color: AppTheme.borderLight),
+                        ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
                               children: [
-                                Row(
-                                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                                  children: [
-                                    Expanded(
-                                      child: Column(
-                                        crossAxisAlignment: CrossAxisAlignment.start,
-                                        children: [
-                                          Text(r.name, style: const TextStyle(fontWeight: FontWeight.w700)),
-                                          Text(r.email, style: const TextStyle(fontSize: 12, color: AppTheme.textSecondary)),
-                                        ],
-                                      ),
-                                    ),
-                                    Text(
-                                      '\u20b9${r.requestedAmount.toStringAsFixed(2)}',
-                                      style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w800, color: AppTheme.primary),
-                                    ),
-                                  ],
-                                ),
-                                const SizedBox(height: 6),
-                                Text(
-                                  'Wallet at request time: \u20b9${r.walletBalance.toStringAsFixed(2)}',
-                                  style: const TextStyle(fontSize: 12, color: AppTheme.textSecondary),
-                                ),
-                                if (_status == 'pending') ...[
-                                  const SizedBox(height: 12),
-                                  Row(
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
                                     children: [
-                                      Expanded(
-                                        child: OutlinedButton(
-                                          onPressed: processing ? null : () => _reject(r),
-                                          style: OutlinedButton.styleFrom(foregroundColor: AppTheme.error),
-                                          child: const Text('Reject'),
+                                      Text(
+                                        r.name,
+                                        style: const TextStyle(
+                                          fontWeight: FontWeight.w700,
                                         ),
                                       ),
-                                      const SizedBox(width: 10),
-                                      Expanded(
-                                        child: ElevatedButton(
-                                          onPressed: processing ? null : () => _approve(r),
-                                          style: ElevatedButton.styleFrom(backgroundColor: AppTheme.success, foregroundColor: Colors.white),
-                                          child: processing
-                                              ? const SizedBox(height: 16, width: 16, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
-                                              : const Text('Approve'),
+                                      Text(
+                                        r.email,
+                                        style: const TextStyle(
+                                          fontSize: 12,
+                                          color: AppTheme.textSecondary,
                                         ),
                                       ),
                                     ],
                                   ),
-                                ],
+                                ),
+                                Text(
+                                  '\u20b9${r.requestedAmount.toStringAsFixed(2)}',
+                                  style: const TextStyle(
+                                    fontSize: 17,
+                                    fontWeight: FontWeight.w800,
+                                    color: AppTheme.primary,
+                                  ),
+                                ),
                               ],
                             ),
-                          );
-                        },
-                      ),
-                    ),
+                            const SizedBox(height: 6),
+                            Text(
+                              'Wallet at request time: \u20b9${r.walletBalance.toStringAsFixed(2)}',
+                              style: const TextStyle(
+                                fontSize: 12,
+                                color: AppTheme.textSecondary,
+                              ),
+                            ),
+                            if (_status == 'pending') ...[
+                              const SizedBox(height: 12),
+                              Row(
+                                children: [
+                                  Expanded(
+                                    child: OutlinedButton(
+                                      onPressed: processing
+                                          ? null
+                                          : () => _reject(r),
+                                      style: OutlinedButton.styleFrom(
+                                        foregroundColor: AppTheme.error,
+                                      ),
+                                      child: const Text('Reject'),
+                                    ),
+                                  ),
+                                  const SizedBox(width: 10),
+                                  Expanded(
+                                    child: ElevatedButton(
+                                      onPressed: processing
+                                          ? null
+                                          : () => _approve(r),
+                                      style: ElevatedButton.styleFrom(
+                                        backgroundColor: AppTheme.success,
+                                        foregroundColor: Colors.white,
+                                      ),
+                                      child: processing
+                                          ? const SizedBox(
+                                              height: 16,
+                                              width: 16,
+                                              child: CircularProgressIndicator(
+                                                strokeWidth: 2,
+                                                color: Colors.white,
+                                              ),
+                                            )
+                                          : const Text('Approve'),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ],
+                          ],
+                        ),
+                      );
+                    },
+                  ),
+                ),
         ),
       ],
     );

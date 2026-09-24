@@ -72,7 +72,9 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     if (result == null || !mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
-        backgroundColor: result == 'attached' ? AppTheme.success : AppTheme.error,
+        backgroundColor: result == 'attached'
+            ? AppTheme.success
+            : AppTheme.error,
         content: Text(
           result == 'attached'
               ? '🎉 Referral code applied — you\u2019re all set!'
@@ -104,76 +106,166 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     _navigate(user.role);
   }
 
+  static const double _wideBreakpoint = 900;
+
   @override
   Widget build(BuildContext context) {
     final authState = ref.watch(authNotifierProvider);
 
     return Scaffold(
-      body: SafeArea(
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.symmetric(horizontal: 24),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const SizedBox(height: 48),
-              _buildHeader(),
-              const SizedBox(height: 32),
+      body: LayoutBuilder(
+        builder: (context, constraints) {
+          final isWide = constraints.maxWidth >= _wideBreakpoint;
 
-              // ── Referral code — always available, whether the person
-              // came from a link or not. Auto-expanded and pre-filled if
-              // one was detected; otherwise collapsed but always reachable.
-              _buildReferralSection(),
-              const SizedBox(height: 16),
-
-              // ── Google Sign-In (primary, fastest) ─────────────
-              GoogleSignInButton(
-                isLoading: authState.isGoogleLoading,
-                onTap: authState.isGoogleLoading || authState.isLoading
-                    ? null
-                    : _googleSignIn,
-              ),
-              const SizedBox(height: 20),
-
-              // ── Divider ───────────────────────────────────────
-              Row(
+          // ── Wide (web / tablet-landscape): brand panel + centered form ──
+          if (isWide) {
+            return SizedBox.expand(
+              child: Row(
                 children: [
-                  const Expanded(child: Divider()),
-                  Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 12),
-                    child: Text(
-                      'or sign in with email',
-                      style: TextStyle(color: Colors.grey[500], fontSize: 12),
+                  const Expanded(
+                    flex: 5,
+                    child: AuthBrandPanel(
+                      eyebrow: 'AI Resume Platform',
+                      headline: 'Pick up right where\nyou left off.',
+                      subheadline:
+                          'Your ATS scores, AI feedback, and saved resumes are exactly where you left them.',
+                      features: [
+                        AuthPanelFeature(
+                          Icons.fact_check_rounded,
+                          'Instant ATS compatibility score',
+                        ),
+                        AuthPanelFeature(
+                          Icons.auto_awesome_rounded,
+                          'AI-powered resume feedback',
+                        ),
+                        AuthPanelFeature(
+                          Icons.forum_rounded,
+                          'Mock interview preparation',
+                        ),
+                      ],
                     ),
                   ),
-                  const Expanded(child: Divider()),
+                  Expanded(
+                    flex: 6,
+                    child: SafeArea(
+                      child: Center(
+                        child: ConstrainedBox(
+                          constraints: const BoxConstraints(maxWidth: 440),
+                          child: SingleChildScrollView(
+                            padding: const EdgeInsets.symmetric(
+                              vertical: 56,
+                              horizontal: 8,
+                            ),
+                            child: _buildFormColumn(authState, isWide: true),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
                 ],
               ),
-              const SizedBox(height: 20),
+            );
+          }
 
-              // ── Email / Password ──────────────────────────────
-              _buildForm(),
-              const SizedBox(height: 16),
-              _buildLoginButton(authState),
-
-              if (authState.error != null) ...[
-                const SizedBox(height: 12),
-                AuthErrorBanner(authState.error!),
-              ],
-
-              const SizedBox(height: 24),
-              _buildRegisterLink(),
-
-              // ← NEW: Guest preview entry point
-              const SizedBox(height: 16),
-              _buildGuestLink(),
-
-              const SizedBox(height: 40),
-            ],
-          ),
-        ),
+          // ── Narrow (mobile): single column, compact lockup header ──
+          return SafeArea(
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.symmetric(horizontal: 24),
+              child: _buildFormColumn(authState, isWide: false),
+            ),
+          );
+        },
       ),
     );
   }
+
+  Widget _buildFormColumn(AuthState authState, {required bool isWide}) =>
+      Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          SizedBox(height: isWide ? 8 : 48),
+
+          if (!isWide) ...[const BrandLockup(), const SizedBox(height: 32)],
+
+          const Text(
+            // SEO/conversion: this screen is the first thing every new
+            // visitor AND every search/AI crawler sees (see app_router.dart
+            // — anonymous users land here for any non-public route), so the
+            // headline needs to explain the product, not just greet a
+            // returning user. Was: 'Welcome back'.
+            'Beat the ATS. Get shortlisted.',
+            style: TextStyle(
+              fontSize: 28,
+              fontWeight: FontWeight.w700,
+              letterSpacing: -0.4,
+            ),
+          ),
+          const SizedBox(height: 6),
+          Text(
+            // Was: 'Sign in to keep polishing your resume' — assumed a
+            // returning user. This works for both, and points first-time
+            // visitors at the free guest option further down this form.
+            'AI resume scoring, keyword matching & expert fixes \u2014 '
+            'sign in to continue, or try it free below.',
+            style: TextStyle(
+              fontSize: 15,
+              color: Colors.grey[600],
+              height: 1.4,
+            ),
+          ),
+          const SizedBox(height: 28),
+
+          // ── Referral code — always available, whether the person
+          // came from a link or not. Auto-expanded and pre-filled if
+          // one was detected; otherwise collapsed but always reachable.
+          _buildReferralSection(),
+          const SizedBox(height: 16),
+
+          // ── Google Sign-In (primary, fastest) ─────────────
+          GoogleSignInButton(
+            isLoading: authState.isGoogleLoading,
+            onTap: authState.isGoogleLoading || authState.isLoading
+                ? null
+                : _googleSignIn,
+          ),
+          const SizedBox(height: 20),
+
+          // ── Divider ───────────────────────────────────────
+          Row(
+            children: [
+              const Expanded(child: Divider()),
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 12),
+                child: Text(
+                  'or sign in with email',
+                  style: TextStyle(color: Colors.grey[500], fontSize: 12),
+                ),
+              ),
+              const Expanded(child: Divider()),
+            ],
+          ),
+          const SizedBox(height: 20),
+
+          // ── Email / Password ──────────────────────────────
+          _buildForm(),
+          const SizedBox(height: 16),
+          _buildLoginButton(authState),
+
+          if (authState.error != null) ...[
+            const SizedBox(height: 12),
+            AuthErrorBanner(authState.error!),
+          ],
+
+          const SizedBox(height: 24),
+          _buildRegisterLink(),
+
+          // Guest preview entry point
+          const SizedBox(height: 16),
+          _buildGuestLink(),
+
+          SizedBox(height: isWide ? 8 : 40),
+        ],
+      );
 
   Widget _buildReferralSection() => Container(
     decoration: BoxDecoration(
@@ -191,14 +283,22 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
             padding: const EdgeInsets.all(14),
             child: Row(
               children: [
-                const Icon(Icons.card_giftcard_rounded, size: 16, color: AppTheme.accent),
+                const Icon(
+                  Icons.card_giftcard_rounded,
+                  size: 16,
+                  color: AppTheme.accent,
+                ),
                 const SizedBox(width: 8),
                 Expanded(
                   child: Text(
                     _referralCtrl.text.trim().isNotEmpty
                         ? 'Referral code: ${_referralCtrl.text.trim()}'
                         : 'Have a referral code?',
-                    style: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.w700, color: AppTheme.accent),
+                    style: const TextStyle(
+                      fontSize: 12.5,
+                      fontWeight: FontWeight.w700,
+                      color: AppTheme.accent,
+                    ),
                   ),
                 ),
                 Icon(
@@ -220,12 +320,17 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                   controller: _referralCtrl,
                   textCapitalization: TextCapitalization.characters,
                   style: const TextStyle(fontSize: 14),
-                  onChanged: (_) => setState(() {}), // keep the collapsed-header preview in sync
+                  onChanged: (_) => setState(
+                    () {},
+                  ), // keep the collapsed-header preview in sync
                   decoration: const InputDecoration(
                     isDense: true,
                     hintText: 'Enter code (optional)',
                     border: OutlineInputBorder(),
-                    contentPadding: EdgeInsets.symmetric(horizontal: 10, vertical: 10),
+                    contentPadding: EdgeInsets.symmetric(
+                      horizontal: 10,
+                      vertical: 10,
+                    ),
                   ),
                 ),
                 const SizedBox(height: 6),
@@ -238,35 +343,6 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
           ),
       ],
     ),
-  );
-
-  Widget _buildHeader() => Column(
-    crossAxisAlignment: CrossAxisAlignment.start,
-    children: [
-      Container(
-        width: 52,
-        height: 52,
-        decoration: BoxDecoration(
-          color: AppTheme.primary,
-          borderRadius: BorderRadius.circular(14),
-        ),
-        child: const Icon(
-          Icons.document_scanner_rounded,
-          color: Colors.white,
-          size: 28,
-        ),
-      ),
-      const SizedBox(height: 20),
-      const Text(
-        'Welcome back',
-        style: TextStyle(fontSize: 28, fontWeight: FontWeight.w700),
-      ),
-      const SizedBox(height: 6),
-      Text(
-        'Sign in to analyze and improve your resume',
-        style: TextStyle(fontSize: 15, color: Colors.grey[600], height: 1.4),
-      ),
-    ],
   );
 
   Widget _buildForm() => Form(

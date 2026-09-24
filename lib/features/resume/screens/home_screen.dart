@@ -23,6 +23,8 @@ import 'package:intl/intl.dart';
 import '../../../core/constants/app_theme.dart';
 import '../../../core/router/app_router.dart';
 import '../../../core/services/referral_service.dart';
+import '../../../core/widgets/motion.dart';
+import '../../../core/widgets/auth_gate.dart';
 import '../../auth/providers/auth_provider.dart';
 import '../../../providers/providers.dart';
 import '../../../providers/stats_provider.dart'; // NEW
@@ -121,7 +123,11 @@ class HomeScreen extends ConsumerWidget {
           actions: [
             IconButton(
               icon: const Icon(Icons.person_outline),
-              onPressed: () => context.push(AppRoutes.profile),
+              onPressed: () async {
+                if (await requireAuth(context, ref, feature: 'your Profile')) {
+                  if (context.mounted) context.push(AppRoutes.profile);
+                }
+              },
               tooltip: 'Profile',
             ),
           ],
@@ -143,7 +149,7 @@ class HomeScreen extends ConsumerWidget {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   // ── Greeting ─────────────────────────────────────────────
-                  _buildGreeting(user?.name ?? 'there'),
+                  FadeSlideIn(child: _buildGreeting(user?.name ?? 'there')),
 
                   // ── P3 #8: Analyzed Counter ───────────────────────────────
                   const SizedBox(height: 10),
@@ -157,56 +163,78 @@ class HomeScreen extends ConsumerWidget {
 
                   // ── Quick Stats ───────────────────────────────────────────
                   const SizedBox(height: 20),
-                  _buildQuickStats(context, analyses),
+                  FadeSlideIn(
+                    delay: const Duration(milliseconds: 80),
+                    child: _buildQuickStats(context, ref, analyses),
+                  ),
 
                   // ── Quick Tools ───────────────────────────────────────────
                   const SizedBox(height: 24),
-                  const Text(
-                    'Quick Tools',
-                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+                  FadeSlideIn(
+                    delay: const Duration(milliseconds: 160),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text(
+                          'Quick Tools',
+                          style: TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                        const SizedBox(height: 12),
+                        _buildQuickTools(context, ref),
+                      ],
+                    ),
                   ),
-                  const SizedBox(height: 12),
-                  _buildQuickTools(context),
 
                   // ── Recent Analyses (moved up — your own stuff first) ─────
                   const SizedBox(height: 28),
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      const Text(
-                        'Recent Analyses',
-                        style: TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.w600,
+                  FadeSlideIn(
+                    delay: const Duration(milliseconds: 240),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            const Text(
+                              'Recent Analyses',
+                              style: TextStyle(
+                                fontSize: 16,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                            GestureDetector(
+                              onTap: () => ref.invalidate(userAnalysesProvider),
+                              child: Icon(
+                                Icons.refresh,
+                                size: 18,
+                                color: AppTheme.textSecondary,
+                              ),
+                            ),
+                          ],
                         ),
-                      ),
-                      GestureDetector(
-                        onTap: () => ref.invalidate(userAnalysesProvider),
-                        child: Icon(
-                          Icons.refresh,
-                          size: 18,
-                          color: AppTheme.textSecondary,
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 12),
-                  analyses.when(
-                    data: (list) => list.isEmpty
-                        ? _buildEmptyState(context)
-                        : Column(
-                            children: list
-                                .take(2)
-                                .map((a) => _AnalysisCard(analysis: a))
-                                .toList(),
+                        const SizedBox(height: 12),
+                        analyses.when(
+                          data: (list) => list.isEmpty
+                              ? _buildEmptyState(context)
+                              : Column(
+                                  children: list
+                                      .take(2)
+                                      .map((a) => _AnalysisCard(analysis: a))
+                                      .toList(),
+                                ),
+                          loading: () => const Center(
+                            child: Padding(
+                              padding: EdgeInsets.all(32),
+                              child: CircularProgressIndicator(),
+                            ),
                           ),
-                    loading: () => const Center(
-                      child: Padding(
-                        padding: EdgeInsets.all(32),
-                        child: CircularProgressIndicator(),
-                      ),
+                          error: (e, _) => Center(child: Text('Error: $e')),
+                        ),
+                      ],
                     ),
-                    error: (e, _) => Center(child: Text('Error: $e')),
                   ),
 
                   // ── Everything below is "why this app is good" content —
@@ -215,7 +243,7 @@ class HomeScreen extends ConsumerWidget {
                   const SizedBox(height: 36),
                   Row(
                     children: [
-                      Expanded(child: Divider(color: AppTheme.borderLight)),
+                      Expanded(child: Divider(color: AppTheme.border(context))),
                       Padding(
                         padding: const EdgeInsets.symmetric(horizontal: 12),
                         child: Text(
@@ -228,7 +256,7 @@ class HomeScreen extends ConsumerWidget {
                           ),
                         ),
                       ),
-                      Expanded(child: Divider(color: AppTheme.borderLight)),
+                      Expanded(child: Divider(color: AppTheme.border(context))),
                     ],
                   ),
 
@@ -339,7 +367,7 @@ class HomeScreen extends ConsumerWidget {
           Icon(Icons.trending_up_rounded, size: 14, color: AppTheme.accent),
           const SizedBox(width: 6),
           Text(
-            '${count *100}+ resumes analyzed & improved',
+            '${count * 100}+ resumes analyzed & improved',
             style: TextStyle(
               fontSize: 12,
               fontWeight: FontWeight.w600,
@@ -374,6 +402,7 @@ class HomeScreen extends ConsumerWidget {
 
   Widget _buildQuickStats(
     BuildContext context,
+    WidgetRef ref,
     AsyncValue<List<AnalysisModel>> analyses,
   ) {
     return analyses.when(
@@ -392,8 +421,12 @@ class HomeScreen extends ConsumerWidget {
                       list.length)
                   .round();
 
-        return GestureDetector(
-          onTap: () => context.push(AppRoutes.progress),
+        return PressableScale(
+          onTap: () async {
+            if (await requireAuth(context, ref, feature: 'My Progress')) {
+              if (context.mounted) context.push(AppRoutes.progress);
+            }
+          },
           child: Container(
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
             decoration: BoxDecoration(
@@ -403,6 +436,13 @@ class HomeScreen extends ConsumerWidget {
                 end: Alignment.bottomRight,
               ),
               borderRadius: BorderRadius.circular(16),
+              boxShadow: [
+                BoxShadow(
+                  color: AppTheme.primary.withOpacity(0.25),
+                  blurRadius: 20,
+                  offset: const Offset(0, 8),
+                ),
+              ],
             ),
             child: IntrinsicHeight(
               child: Row(
@@ -428,7 +468,7 @@ class HomeScreen extends ConsumerWidget {
 
   // ── Existing: Quick Tools ───────────────────────────────────────────────────
 
-  Widget _buildQuickTools(BuildContext context) => Column(
+  Widget _buildQuickTools(BuildContext context, WidgetRef ref) => Column(
     children: [
       Row(
         children: [
@@ -488,19 +528,29 @@ class HomeScreen extends ConsumerWidget {
               title: 'My Progress',
               subtitle: 'Track your score over time',
               color: AppTheme.accent,
-              onTap: () => context.push(AppRoutes.progress),
+              onTap: () async {
+                if (await requireAuth(context, ref, feature: 'My Progress')) {
+                  if (context.mounted) context.push(AppRoutes.progress);
+                }
+              },
             ),
           ),
         ],
       ),
       const SizedBox(height: 12),
-      GestureDetector(
-        onTap: () => Navigator.push(
-          context,
-          MaterialPageRoute(
-            builder: (_) => const PremiumHubScreen(resumeText: ''),
-          ),
-        ),
+      PressableScale(
+        onTap: () async {
+          if (await requireAuth(context, ref, feature: 'Premium Tools')) {
+            if (context.mounted) {
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (_) => const PremiumHubScreen(resumeText: ''),
+                ),
+              );
+            }
+          }
+        },
         child: Container(
           padding: const EdgeInsets.all(14),
           decoration: BoxDecoration(
@@ -510,7 +560,14 @@ class HomeScreen extends ConsumerWidget {
               end: Alignment.bottomRight,
             ),
             borderRadius: BorderRadius.circular(14),
-            border: Border.all(color: const Color(0xFF2D5BE3).withOpacity(0.4)),
+            border: Border.all(color: AppTheme.premium.withOpacity(0.35)),
+            boxShadow: [
+              BoxShadow(
+                color: AppTheme.premium.withOpacity(0.12),
+                blurRadius: 20,
+                offset: const Offset(0, 6),
+              ),
+            ],
           ),
           child: Row(
             children: [
@@ -539,13 +596,13 @@ class HomeScreen extends ConsumerWidget {
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                 decoration: BoxDecoration(
-                  color: const Color(0xFFFF6B35).withOpacity(0.2),
+                  color: AppTheme.premium.withOpacity(0.18),
                   borderRadius: BorderRadius.circular(6),
                 ),
                 child: const Text(
                   'from ₹39',
                   style: TextStyle(
-                    color: Color(0xFFFF6B35),
+                    color: AppTheme.premiumLight,
                     fontSize: 11,
                     fontWeight: FontWeight.w700,
                   ),
@@ -571,17 +628,25 @@ class HomeScreen extends ConsumerWidget {
     margin: const EdgeInsets.only(top: 32),
     padding: const EdgeInsets.all(32),
     decoration: BoxDecoration(
-      color: Colors.grey[50],
+      color: AppTheme.cardBg(context),
       borderRadius: BorderRadius.circular(16),
-      border: Border.all(color: AppTheme.borderLight),
+      border: Border.all(color: AppTheme.border(context)),
     ),
     child: Column(
       children: [
-        Icon(Icons.description_outlined, size: 48, color: Colors.grey[400]),
+        Icon(
+          Icons.description_outlined,
+          size: 48,
+          color: AppTheme.faintIcon(context),
+        ),
         const SizedBox(height: 16),
-        const Text(
+        Text(
           'No analyses yet',
-          style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600, color: Colors.black),
+          style: TextStyle(
+            fontSize: 16,
+            fontWeight: FontWeight.w600,
+            color: AppTheme.textMain(context),
+          ),
         ),
         const SizedBox(height: 6),
         Text(
@@ -1123,16 +1188,10 @@ class _TestimonialCard extends StatelessWidget {
     width: 230,
     padding: const EdgeInsets.all(16),
     decoration: BoxDecoration(
-      color: Colors.white,
+      color: AppTheme.cardBg(context),
       borderRadius: BorderRadius.circular(16),
-      border: Border.all(color: AppTheme.borderLight),
-      boxShadow: [
-        BoxShadow(
-          color: Colors.black.withOpacity(0.04),
-          blurRadius: 8,
-          offset: const Offset(0, 2),
-        ),
-      ],
+      border: Border.all(color: AppTheme.border(context)),
+      boxShadow: AppTheme.elevation(context, strength: 0.6),
     ),
     child: Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -1282,7 +1341,7 @@ class _ToolCard extends StatelessWidget {
   });
 
   @override
-  Widget build(BuildContext context) => GestureDetector(
+  Widget build(BuildContext context) => PressableScale(
     onTap: onTap,
     child: Container(
       padding: const EdgeInsets.all(16),
@@ -1290,6 +1349,7 @@ class _ToolCard extends StatelessWidget {
         color: color.withOpacity(0.07),
         borderRadius: BorderRadius.circular(14),
         border: Border.all(color: color.withOpacity(0.2)),
+        boxShadow: AppTheme.elevation(context, strength: 0.5),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -1342,7 +1402,7 @@ class _ToolCardWide extends StatelessWidget {
   });
 
   @override
-  Widget build(BuildContext context) => GestureDetector(
+  Widget build(BuildContext context) => PressableScale(
     onTap: onTap,
     child: Container(
       padding: const EdgeInsets.all(16),
@@ -1350,6 +1410,7 @@ class _ToolCardWide extends StatelessWidget {
         color: color.withOpacity(0.07),
         borderRadius: BorderRadius.circular(14),
         border: Border.all(color: color.withOpacity(0.2)),
+        boxShadow: AppTheme.elevation(context, strength: 0.5),
       ),
       child: Row(
         children: [
@@ -1437,9 +1498,13 @@ class _AnalysisCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) => Card(
     margin: const EdgeInsets.only(bottom: 12),
-    child: InkWell(
-      onTap: () => context.push(AppRoutes.analysisResultWithId(analysis.id)),
+    elevation: 0,
+    shape: RoundedRectangleBorder(
       borderRadius: BorderRadius.circular(12),
+      side: BorderSide(color: AppTheme.border(context)),
+    ),
+    child: PressableScale(
+      onTap: () => context.push(AppRoutes.analysisResultWithId(analysis.id)),
       child: Padding(
         padding: const EdgeInsets.all(16),
         child: Row(

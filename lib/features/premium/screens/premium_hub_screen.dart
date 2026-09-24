@@ -76,13 +76,17 @@ class _PremiumHubScreenState extends ConsumerState<PremiumHubScreen> {
     final userName = user?.name ?? 'User';
 
     return Scaffold(
-      backgroundColor: const Color(0xFF0A0E1A),
+      backgroundColor: AppTheme.pageBg(context),
       appBar: AppBar(
-        backgroundColor: const Color(0xFF0A0E1A),
-        iconTheme: const IconThemeData(color: Colors.white),
-        title: const Text(
+        backgroundColor: AppTheme.pageBg(context),
+        elevation: 0,
+        iconTheme: IconThemeData(color: AppTheme.textMain(context)),
+        title: Text(
           'Premium Features',
-          style: TextStyle(color: Colors.white, fontWeight: FontWeight.w700),
+          style: TextStyle(
+            color: AppTheme.textMain(context),
+            fontWeight: FontWeight.w700,
+          ),
         ),
       ),
       body: SingleChildScrollView(
@@ -92,16 +96,26 @@ class _PremiumHubScreenState extends ConsumerState<PremiumHubScreen> {
           children: [
             // Header tagline
             Container(
-              padding: const EdgeInsets.all(16),
+              padding: const EdgeInsets.all(18),
               decoration: BoxDecoration(
-                border: Border.all(color: Colors.white.withOpacity(0.1)),
-                borderRadius: BorderRadius.circular(14),
-                color: Colors.white.withOpacity(0.05),
+                gradient: const LinearGradient(
+                  colors: [AppTheme.primary, AppTheme.primaryDark],
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                ),
+                borderRadius: BorderRadius.circular(16),
+                boxShadow: [
+                  BoxShadow(
+                    color: AppTheme.primary.withOpacity(0.28),
+                    blurRadius: 20,
+                    offset: const Offset(0, 8),
+                  ),
+                ],
               ),
               child: Row(
                 children: [
-                  const Text('🚀', style: TextStyle(fontSize: 28)),
-                  const SizedBox(width: 12),
+                  const Text('🚀', style: TextStyle(fontSize: 30)),
+                  const SizedBox(width: 14),
                   const Expanded(
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
@@ -111,14 +125,14 @@ class _PremiumHubScreenState extends ConsumerState<PremiumHubScreen> {
                           style: TextStyle(
                             color: Colors.white,
                             fontWeight: FontWeight.w700,
-                            fontSize: 15,
+                            fontSize: 15.5,
                           ),
                         ),
                         SizedBox(height: 4),
                         Text(
                           'AI-powered tools to make your resume land more interviews',
                           style: TextStyle(
-                            color: Colors.white54,
+                            color: Colors.white70,
                             fontSize: 12,
                             height: 1.3,
                           ),
@@ -337,8 +351,8 @@ class _SectionLabel extends StatelessWidget {
   @override
   Widget build(BuildContext context) => Text(
     text,
-    style: const TextStyle(
-      color: Colors.white70,
+    style: TextStyle(
+      color: AppTheme.textMuted(context),
       fontWeight: FontWeight.w700,
       fontSize: 13,
       letterSpacing: 0.5,
@@ -956,13 +970,22 @@ class _FeatureCard extends StatelessWidget {
       child: Container(
         padding: const EdgeInsets.all(14),
         decoration: BoxDecoration(
-          color: Colors.white.withOpacity(0.05),
+          color: AppTheme.subtleFill(context),
           borderRadius: BorderRadius.circular(14),
           border: Border.all(
             color: isUnlocked && !isFree
                 ? AppTheme.success.withOpacity(0.4)
-                : Colors.white.withOpacity(0.08),
+                : AppTheme.subtleBorder(context),
           ),
+          boxShadow: AppTheme.isDark(context)
+              ? null
+              : [
+                  BoxShadow(
+                    color: Colors.black.withOpacity(0.04),
+                    blurRadius: 10,
+                    offset: const Offset(0, 3),
+                  ),
+                ],
         ),
         child: Row(
           children: [
@@ -984,8 +1007,8 @@ class _FeatureCard extends StatelessWidget {
                 children: [
                   Text(
                     title,
-                    style: const TextStyle(
-                      color: Colors.white,
+                    style: TextStyle(
+                      color: AppTheme.textMain(context),
                       fontWeight: FontWeight.w700,
                       fontSize: 14,
                     ),
@@ -993,8 +1016,8 @@ class _FeatureCard extends StatelessWidget {
                   const SizedBox(height: 2),
                   Text(
                     subtitle,
-                    style: const TextStyle(
-                      color: Colors.white54,
+                    style: TextStyle(
+                      color: AppTheme.textMuted(context),
                       fontSize: 11,
                       height: 1.3,
                     ),
@@ -1048,13 +1071,17 @@ class _FeatureCard extends StatelessWidget {
                   Text(
                     price,
                     style: TextStyle(
-                      color: priceColor ?? Colors.white,
+                      color: priceColor ?? AppTheme.textMain(context),
                       fontWeight: FontWeight.w800,
                       fontSize: 15,
                     ),
                   ),
                 const SizedBox(height: 4),
-                Icon(Icons.chevron_right, color: Colors.white30, size: 18),
+                Icon(
+                  Icons.chevron_right,
+                  color: AppTheme.faintIcon(context),
+                  size: 18,
+                ),
               ],
             ),
           ],

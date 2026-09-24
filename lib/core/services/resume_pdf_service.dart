@@ -11,9 +11,7 @@ import 'package:share_plus/share_plus.dart';
 import 'resume_pdf_web.dart'
     if (dart.library.io) 'resume_pdf_stub.dart'
     as web_dl;
-import 'interview_prep_service.dart'
-
-    show JobFitReport, InterviewQA, InterviewQuestionCategory, InterviewQuestionCategoryX;
+import 'interview_prep_service.dart';
 
 // ─────────────────────────────────────────────────────────────────────────
 // RESUME TEMPLATES
@@ -116,7 +114,8 @@ class ResumeTemplates {
   static const boldViolet = ResumeTemplateStyle(
     id: 'bold_violet',
     name: 'Bold Violet',
-    description: 'Distinctive accent — for startup, design, and creative-tech roles',
+    description:
+        'Distinctive accent — for startup, design, and creative-tech roles',
     nameHex: '1E1B2E',
     accentHex: '7C3AED',
     secondaryHex: '6B7280',
@@ -131,7 +130,8 @@ class ResumeTemplates {
   static const elegantMaroon = ResumeTemplateStyle(
     id: 'elegant_maroon',
     name: 'Elegant Maroon',
-    description: 'Refined and traditional — for business, finance, and legal roles',
+    description:
+        'Refined and traditional — for business, finance, and legal roles',
     nameHex: '1F1315',
     accentHex: '9F1239',
     secondaryHex: '78716C',
@@ -143,7 +143,13 @@ class ResumeTemplates {
     bulletStyle: ResumeBulletStyle.dot,
   );
 
-  static const all = [classicBlue, modernTeal, minimalistMono, boldViolet, elegantMaroon];
+  static const all = [
+    classicBlue,
+    modernTeal,
+    minimalistMono,
+    boldViolet,
+    elegantMaroon,
+  ];
 
   static ResumeTemplateStyle byId(String id) =>
       all.firstWhere((t) => t.id == id, orElse: () => classicBlue);
@@ -158,22 +164,68 @@ class ResumeTemplates {
         keywords.where((k) => lower.contains(k)).length;
 
     final techScore = score(const [
-      'flutter', 'android', 'ios', 'react', 'developer', 'engineer', 'software',
-      'backend', 'frontend', 'full stack', 'devops', 'cloud computing', 'python',
-      'java ', 'kotlin', 'swift', 'rest api', 'database', 'sql', 'machine learning',
-      'data scientist', 'programming', 'github', 'kubernetes', 'docker', 'aws',
+      'flutter',
+      'android',
+      'ios',
+      'react',
+      'developer',
+      'engineer',
+      'software',
+      'backend',
+      'frontend',
+      'full stack',
+      'devops',
+      'cloud computing',
+      'python',
+      'java ',
+      'kotlin',
+      'swift',
+      'rest api',
+      'database',
+      'sql',
+      'machine learning',
+      'data scientist',
+      'programming',
+      'github',
+      'kubernetes',
+      'docker',
+      'aws',
     ]);
     final businessScore = score(const [
-      'finance', 'accounting', 'banking', 'sales', 'marketing', 'business analyst',
-      'consultant', 'operations manager', 'mba', 'hr ', 'human resources', 'legal',
-      'audit', 'stakeholder management', 'p&l', 'financial analysis', 'compliance',
+      'finance',
+      'accounting',
+      'banking',
+      'sales',
+      'marketing',
+      'business analyst',
+      'consultant',
+      'operations manager',
+      'mba',
+      'hr ',
+      'human resources',
+      'legal',
+      'audit',
+      'stakeholder management',
+      'p&l',
+      'financial analysis',
+      'compliance',
     ]);
     final designScore = score(const [
-      'ux design', 'ui design', 'graphic design', 'product design', 'figma',
-      'adobe', 'creative director', 'visual design', 'user research', 'prototyping',
+      'ux design',
+      'ui design',
+      'graphic design',
+      'product design',
+      'figma',
+      'adobe',
+      'creative director',
+      'visual design',
+      'user research',
+      'prototyping',
     ]);
 
-    if (designScore > 0 && designScore >= techScore && designScore >= businessScore) {
+    if (designScore > 0 &&
+        designScore >= techScore &&
+        designScore >= businessScore) {
       return boldViolet;
     }
     if (businessScore > techScore) return elegantMaroon;
@@ -340,15 +392,15 @@ class ResumePdfService {
         widgets.add(
           pw.Text(
             line,
-            style: pw.TextStyle(
-              fontSize: 9.5,
-              color: style.secondaryPdf,
-            ),
+            style: pw.TextStyle(fontSize: 9.5, color: style.secondaryPdf),
           ),
         );
         widgets.add(pw.SizedBox(height: 6));
         widgets.add(
-          pw.Divider(color: style.accentPdf, thickness: style.dividerThicknessBold),
+          pw.Divider(
+            color: style.accentPdf,
+            thickness: style.dividerThicknessBold,
+          ),
         );
         widgets.add(pw.SizedBox(height: 2));
         continue;
@@ -370,7 +422,10 @@ class ResumePdfService {
           ),
         );
         widgets.add(
-          pw.Divider(color: style.accentPdf, thickness: style.dividerThicknessThin),
+          pw.Divider(
+            color: style.accentPdf,
+            thickness: style.dividerThicknessThin,
+          ),
         );
         widgets.add(pw.SizedBox(height: 3));
         continue;
@@ -396,10 +451,7 @@ class ResumePdfService {
               ),
               pw.Text(
                 parts.last,
-                style: pw.TextStyle(
-                  fontSize: 9.5,
-                  color: style.secondaryPdf,
-                ),
+                style: pw.TextStyle(fontSize: 9.5, color: style.secondaryPdf),
               ),
             ],
           ),
@@ -429,7 +481,11 @@ class ResumePdfService {
                 pw.Expanded(
                   child: pw.Text(
                     content,
-                    style: pw.TextStyle(fontSize: 10, lineSpacing: 1.4, color: style.bodyPdf),
+                    style: pw.TextStyle(
+                      fontSize: 10,
+                      lineSpacing: 1.4,
+                      color: style.bodyPdf,
+                    ),
                   ),
                 ),
               ],
@@ -476,7 +532,11 @@ class ResumePdfService {
           padding: const pw.EdgeInsets.only(top: 1),
           child: pw.Text(
             line,
-            style: pw.TextStyle(fontSize: 10, lineSpacing: 1.3, color: style.bodyPdf),
+            style: pw.TextStyle(
+              fontSize: 10,
+              lineSpacing: 1.3,
+              color: style.bodyPdf,
+            ),
           ),
         ),
       );
@@ -622,65 +682,63 @@ class ResumePdfService {
           ),
         );
 
-    pw.Widget bulletList(List<String> items, {PdfColor? dotColor}) =>
-        pw.Column(
-          crossAxisAlignment: pw.CrossAxisAlignment.start,
-          children: items
-              .map(
-                (item) => pw.Padding(
-                  padding: const pw.EdgeInsets.only(bottom: 4),
-                  child: pw.Row(
-                    crossAxisAlignment: pw.CrossAxisAlignment.start,
-                    children: [
-                      pw.Container(
-                        margin: const pw.EdgeInsets.only(top: 3.5, right: 6),
-                        width: 4,
-                        height: 4,
-                        decoration: pw.BoxDecoration(
-                          color: dotColor ?? primary,
-                          shape: pw.BoxShape.circle,
-                        ),
-                      ),
-                      pw.Expanded(
-                        child: pw.Text(
-                          _ppSafe(item),
-                          style: pw.TextStyle(
-                            color: textDark,
-                            fontSize: 10.5,
-                            lineSpacing: 1.3,
-                          ),
-                        ),
-                      ),
-                    ],
+    pw.Widget bulletList(List<String> items, {PdfColor? dotColor}) => pw.Column(
+      crossAxisAlignment: pw.CrossAxisAlignment.start,
+      children: items
+          .map(
+            (item) => pw.Padding(
+              padding: const pw.EdgeInsets.only(bottom: 4),
+              child: pw.Row(
+                crossAxisAlignment: pw.CrossAxisAlignment.start,
+                children: [
+                  pw.Container(
+                    margin: const pw.EdgeInsets.only(top: 3.5, right: 6),
+                    width: 4,
+                    height: 4,
+                    decoration: pw.BoxDecoration(
+                      color: dotColor ?? primary,
+                      shape: pw.BoxShape.circle,
+                    ),
                   ),
-                ),
-              )
-              .toList(),
-        );
+                  pw.Expanded(
+                    child: pw.Text(
+                      _ppSafe(item),
+                      style: pw.TextStyle(
+                        color: textDark,
+                        fontSize: 10.5,
+                        lineSpacing: 1.3,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          )
+          .toList(),
+    );
 
-    pw.Widget chipWrap(List<String> items, PdfColor bg, PdfColor fg) =>
-        pw.Wrap(
-          spacing: 6,
-          runSpacing: 6,
-          children: items
-              .map(
-                (item) => pw.Container(
-                  padding: const pw.EdgeInsets.symmetric(
-                    horizontal: 8,
-                    vertical: 4,
-                  ),
-                  decoration: pw.BoxDecoration(
-                    color: bg,
-                    borderRadius: pw.BorderRadius.circular(4),
-                  ),
-                  child: pw.Text(
-                    _ppSafe(item),
-                    style: pw.TextStyle(color: fg, fontSize: 9.5),
-                  ),
-                ),
-              )
-              .toList(),
-        );
+    pw.Widget chipWrap(List<String> items, PdfColor bg, PdfColor fg) => pw.Wrap(
+      spacing: 6,
+      runSpacing: 6,
+      children: items
+          .map(
+            (item) => pw.Container(
+              padding: const pw.EdgeInsets.symmetric(
+                horizontal: 8,
+                vertical: 4,
+              ),
+              decoration: pw.BoxDecoration(
+                color: bg,
+                borderRadius: pw.BorderRadius.circular(4),
+              ),
+              child: pw.Text(
+                _ppSafe(item),
+                style: pw.TextStyle(color: fg, fontSize: 9.5),
+              ),
+            ),
+          )
+          .toList(),
+    );
 
     pw.Widget statBox(String label, int value, PdfColor color) => pw.Expanded(
       child: pw.Container(
@@ -762,7 +820,11 @@ class ResumePdfService {
           pw.SizedBox(height: 5),
           pw.Text(
             _ppSafe(qa.answer),
-            style: pw.TextStyle(color: textGrey, fontSize: 10, lineSpacing: 1.35),
+            style: pw.TextStyle(
+              color: textGrey,
+              fontSize: 10,
+              lineSpacing: 1.35,
+            ),
           ),
         ],
       ),
@@ -857,10 +919,7 @@ class ResumePdfService {
             ),
           ),
           pw.Container(
-            padding: const pw.EdgeInsets.symmetric(
-              horizontal: 8,
-              vertical: 4,
-            ),
+            padding: const pw.EdgeInsets.symmetric(horizontal: 8, vertical: 4),
             margin: const pw.EdgeInsets.only(bottom: 4),
             decoration: pw.BoxDecoration(
               color: scoreColor(report.overallScore),
@@ -894,7 +953,11 @@ class ResumePdfService {
     content.add(
       report.skillsMatched.isEmpty
           ? bodyText('No direct skill matches found.', color: textGrey)
-          : chipWrap(report.skillsMatched, PdfColor.fromHex('#E8F5E9'), success),
+          : chipWrap(
+              report.skillsMatched,
+              PdfColor.fromHex('#E8F5E9'),
+              success,
+            ),
     );
 
     // 5. Missing Skills
@@ -910,7 +973,11 @@ class ResumePdfService {
         bodyText('Top missing keywords:', color: textGrey, size: 9.5),
       );
       content.add(
-        chipWrap(report.topMissingKeywords, PdfColor.fromHex('#FFF3E0'), warning),
+        chipWrap(
+          report.topMissingKeywords,
+          PdfColor.fromHex('#FFF3E0'),
+          warning,
+        ),
       );
     }
 
@@ -925,7 +992,9 @@ class ResumePdfService {
     // 7. Selection Probability
     content.add(sectionHeading('7', 'Selection Probability'));
     if (report.selectionProbability.isNotEmpty) {
-      content.add(bodyText(report.selectionProbability, color: primary, size: 11));
+      content.add(
+        bodyText(report.selectionProbability, color: primary, size: 11),
+      );
     }
     if (report.strengths.isNotEmpty) {
       content.add(pw.SizedBox(height: 6));
@@ -974,7 +1043,9 @@ class ResumePdfService {
     for (final cat in order) {
       final qs = byCategory[cat];
       if (qs == null || qs.isEmpty) continue;
-      content.add(sectionHeading('$sectionNum', '${cat.label} Interview Questions'));
+      content.add(
+        sectionHeading('$sectionNum', '${cat.label} Interview Questions'),
+      );
       for (final qa in qs) {
         content.add(questionBlock(qNum, qa));
         qNum++;
@@ -993,7 +1064,11 @@ class ResumePdfService {
             borderRadius: pw.BorderRadius.circular(6),
             border: pw.Border.all(color: primary, width: 0.5),
           ),
-          child: bodyText(report.finalRecruiterAdvice, color: textDark, size: 10.5),
+          child: bodyText(
+            report.finalRecruiterAdvice,
+            color: textDark,
+            size: 10.5,
+          ),
         ),
       );
     }

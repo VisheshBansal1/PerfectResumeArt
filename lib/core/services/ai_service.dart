@@ -572,8 +572,8 @@ class AiService {
   // GROQ_API_KEY and Groq URL removed — AI calls now go through backend proxy.
   // See: https://resume-ai-backend-bwzx.onrender.com/api/ai/chat
 
-  static const String _primaryModel = 'llama-3.3-70b-versatile';
-  static const String _classifierModel = 'llama-3.1-8b-instant';
+  static const String _primaryModel = 'openai/gpt-oss-120b';
+  static const String _classifierModel = 'openai/gpt-oss-120b';
 
   // ─── Resume Text Limit ───────────────────────────────────────────────────────
   // Groq's context window is ~32k tokens. Each analysis prompt template already

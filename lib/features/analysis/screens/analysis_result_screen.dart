@@ -5,6 +5,7 @@ import 'package:next_hire/features/resume/screens/upload_resume_screen.dart';
 
 import '../../../core/constants/app_constants.dart';
 import '../../../core/constants/app_theme.dart';
+import '../../../core/widgets/motion.dart';
 import '../../../models/models.dart';
 import '../../../providers/providers.dart';
 import '../../../providers/resume_context_provider.dart';
@@ -91,15 +92,21 @@ class _AnalysisBody extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           // ── Hero score header
-          _HeroHeader(analysis: analysis),
+          FadeSlideIn(child: _HeroHeader(analysis: analysis)),
           const SizedBox(height: 16),
 
           // ── Score breakdown cards
-          _ScoreGrid(analysis: analysis),
+          FadeSlideIn(
+            delay: const Duration(milliseconds: 90),
+            child: _ScoreGrid(analysis: analysis),
+          ),
           const SizedBox(height: 16),
 
           // ── AI / ATS recommendation banner
-          _RecommendationBanner(analysis: analysis),
+          FadeSlideIn(
+            delay: const Duration(milliseconds: 160),
+            child: _RecommendationBanner(analysis: analysis),
+          ),
           const SizedBox(height: 16),
 
           // ── ATS-only contextual info + dimension guide
@@ -339,6 +346,7 @@ class _HeroHeader extends StatelessWidget {
         color: _accentColor.withOpacity(0.05),
         borderRadius: BorderRadius.circular(16),
         border: Border.all(color: _accentColor.withOpacity(0.18)),
+        boxShadow: AppTheme.elevation(context, strength: 0.5),
       ),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -510,6 +518,7 @@ class _ScoreCard extends StatelessWidget {
         color: color.withOpacity(0.05),
         borderRadius: BorderRadius.circular(12),
         border: Border.all(color: color.withOpacity(0.2)),
+        boxShadow: AppTheme.elevation(context, strength: 0.4),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -542,14 +551,19 @@ class _ScoreCard extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 6),
-          // Progress bar
+          // Progress bar — animates in from 0 alongside the score ring
           ClipRRect(
             borderRadius: BorderRadius.circular(4),
-            child: LinearProgressIndicator(
-              value: score / 100,
-              backgroundColor: color.withOpacity(0.12),
-              valueColor: AlwaysStoppedAnimation(color),
-              minHeight: 4,
+            child: TweenAnimationBuilder<double>(
+              tween: Tween(begin: 0, end: score / 100),
+              duration: const Duration(milliseconds: 1100),
+              curve: Curves.easeOutCubic,
+              builder: (context, value, _) => LinearProgressIndicator(
+                value: value,
+                backgroundColor: color.withOpacity(0.12),
+                valueColor: AlwaysStoppedAnimation(color),
+                minHeight: 4,
+              ),
             ),
           ),
           const SizedBox(height: 5),
@@ -1003,10 +1017,10 @@ class _SkillItemText extends StatelessWidget {
 
     return RichText(
       text: TextSpan(
-        style: const TextStyle(
+        style: TextStyle(
           fontSize: 13,
           height: 1.4,
-          color: AppTheme.textPrimary,
+          color: AppTheme.textMain(context),
         ),
         children: [
           TextSpan(
@@ -1076,8 +1090,10 @@ class _ProjectCard extends StatelessWidget {
       margin: const EdgeInsets.only(bottom: 12),
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        border: Border.all(color: AppTheme.borderLight),
+        color: AppTheme.cardBg(context),
+        border: Border.all(color: AppTheme.border(context)),
         borderRadius: BorderRadius.circular(12),
+        boxShadow: AppTheme.elevation(context, strength: 0.4),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -1369,7 +1385,7 @@ class _AdminDecisionCard extends StatelessWidget {
               width: double.infinity,
               padding: const EdgeInsets.all(10),
               decoration: BoxDecoration(
-                color: Colors.white,
+                color: AppTheme.cardBg(context),
                 borderRadius: BorderRadius.circular(8),
                 border: Border.all(color: color.withOpacity(0.15)),
               ),
@@ -1377,7 +1393,7 @@ class _AdminDecisionCard extends StatelessWidget {
                 analysis.adminNotes!,
                 style: TextStyle(
                   fontSize: 13,
-                  color: Colors.grey[700],
+                  color: AppTheme.textMuted(context),
                   height: 1.45,
                 ),
               ),
@@ -1480,31 +1496,36 @@ class _CircleScore extends StatelessWidget {
     return SizedBox(
       width: size,
       height: size,
-      child: Stack(
-        children: [
-          SizedBox(
-            width: size,
-            height: size,
-            child: CircularProgressIndicator(
-              value: score / 100,
-              strokeWidth: 5.5,
-              backgroundColor: Colors.grey.shade200,
-              valueColor: AlwaysStoppedAnimation(color),
-              strokeCap: StrokeCap.round,
-            ),
-          ),
-          Center(
-            child: Text(
-              '$score',
-              style: TextStyle(
-                fontSize: size * 0.27,
-                fontWeight: FontWeight.w800,
-                color: color,
-                height: 1,
+      child: TweenAnimationBuilder<double>(
+        tween: Tween(begin: 0, end: score / 100),
+        duration: const Duration(milliseconds: 1100),
+        curve: Curves.easeOutCubic,
+        builder: (context, value, _) => Stack(
+          children: [
+            SizedBox(
+              width: size,
+              height: size,
+              child: CircularProgressIndicator(
+                value: value,
+                strokeWidth: 5.5,
+                backgroundColor: color.withOpacity(0.12),
+                valueColor: AlwaysStoppedAnimation(color),
+                strokeCap: StrokeCap.round,
               ),
             ),
-          ),
-        ],
+            Center(
+              child: Text(
+                '${(value * 100).round()}',
+                style: TextStyle(
+                  fontSize: size * 0.27,
+                  fontWeight: FontWeight.w800,
+                  color: color,
+                  height: 1,
+                ),
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -1547,7 +1568,11 @@ class _PremiumCta extends ConsumerWidget {
             ),
             child: Text(
               'See all premium tools →',
-              style: TextStyle(color: AppTheme.textSecondary, fontSize: 12.5, fontWeight: FontWeight.w600),
+              style: TextStyle(
+                color: AppTheme.textSecondary,
+                fontSize: 12.5,
+                fontWeight: FontWeight.w600,
+              ),
             ),
           ),
         ),

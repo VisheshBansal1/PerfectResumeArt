@@ -1,12 +1,17 @@
 {
-    "name": "next_hire",
-    "short_name": "next_hire",
-    "start_url": ".",
+    "name": "Perfect Resume Art \u2014 AI Resume Checker & ATS Score Analyzer",
+    "short_name": "Perfect Resume Art",
+    "description": "Get an instant ATS resume score, match your resume to any job description, fix weak sections with AI, and build a new resume \u2014 free to start, no signup required for the Instant Health Scan.",
+    "start_url": "/free-resume-check?utm_source=pwa&utm_medium=homescreen",
+    "id": "/",
+    "scope": "/",
     "display": "standalone",
-    "background_color": "#hexcode",
-    "theme_color": "#hexcode",
-    "description": "A new Flutter project.",
     "orientation": "portrait-primary",
+    "background_color": "#0B0E1A",
+    "theme_color": "#4F46E5",
+    "lang": "en",
+    "dir": "ltr",
+    "categories": ["business", "productivity", "utilities"],
     "prefer_related_applications": false,
     "icons": [
         {
@@ -30,6 +35,22 @@
             "sizes": "512x512",
             "type": "image/png",
             "purpose": "maskable"
+        }
+    ],
+    "shortcuts": [
+        {
+            "name": "Free ATS Preview",
+            "short_name": "Free Preview",
+            "description": "Get a free ATS score with no signup",
+            "url": "/free-resume-check?utm_source=pwa&utm_medium=shortcut",
+            "icons": [{ "src": "icons/Icon-192.png", "sizes": "192x192" }]
+        },
+        {
+            "name": "ATS Checker",
+            "short_name": "ATS Checker",
+            "description": "Run the full ATS compatibility check",
+            "url": "/ats-checker?utm_source=pwa&utm_medium=shortcut",
+            "icons": [{ "src": "icons/Icon-192.png", "sizes": "192x192" }]
         }
     ]
 }

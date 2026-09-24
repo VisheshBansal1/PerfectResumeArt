@@ -9,6 +9,7 @@ import 'package:flutter/services.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../../../core/constants/app_theme.dart';
+import '../../../core/widgets/motion.dart';
 
 class ContactScreen extends StatelessWidget {
   const ContactScreen({super.key});
@@ -19,7 +20,8 @@ class ContactScreen extends StatelessWidget {
     final uri = Uri(
       scheme: 'mailto',
       path: _supportEmail,
-      query: 'subject=${Uri.encodeComponent('Perfect Resume Art — Support Request')}',
+      query:
+          'subject=${Uri.encodeComponent('Perfect Resume Art — Support Request')}',
     );
     final launched = await launchUrl(uri);
     if (!launched && context.mounted) {
@@ -30,7 +32,10 @@ class ContactScreen extends StatelessWidget {
   void _copyEmail(BuildContext context) {
     Clipboard.setData(const ClipboardData(text: _supportEmail));
     ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Email address copied'), duration: Duration(seconds: 2)),
+      const SnackBar(
+        content: Text('Email address copied'),
+        duration: Duration(seconds: 2),
+      ),
     );
   }
 
@@ -52,7 +57,11 @@ class ContactScreen extends StatelessWidget {
                 color: AppTheme.primary.withOpacity(0.1),
                 shape: BoxShape.circle,
               ),
-              child: const Icon(Icons.support_agent_rounded, color: AppTheme.primary, size: 34),
+              child: const Icon(
+                Icons.support_agent_rounded,
+                color: AppTheme.primary,
+                size: 34,
+              ),
             ),
           ),
           const SizedBox(height: 20),
@@ -70,72 +79,85 @@ class ContactScreen extends StatelessWidget {
             'Payment issues, bugs, questions about your resume analysis,\n'
             'or anything else — reach out and we\'ll get back to you.',
             textAlign: TextAlign.center,
-            style: TextStyle(fontSize: 13.5, color: AppTheme.textSecondary, height: 1.5),
+            style: TextStyle(
+              fontSize: 13.5,
+              color: AppTheme.textSecondary,
+              height: 1.5,
+            ),
           ),
           const SizedBox(height: 28),
-          Container(
-            padding: const EdgeInsets.all(18),
-            decoration: BoxDecoration(
-              color: isDark ? AppTheme.cardDark : AppTheme.cardLight,
-              borderRadius: BorderRadius.circular(16),
-              border: Border.all(color: isDark ? AppTheme.borderDark : AppTheme.borderLight),
-            ),
-            child: Column(
-              children: [
-                const Text(
-                  'SUPPORT EMAIL',
-                  style: TextStyle(
-                    fontSize: 11,
-                    fontWeight: FontWeight.w700,
-                    letterSpacing: 1,
-                    color: AppTheme.textSecondary,
-                  ),
+          FadeSlideIn(
+            delay: const Duration(milliseconds: 80),
+            child: Container(
+              padding: const EdgeInsets.all(18),
+              decoration: BoxDecoration(
+                color: isDark ? AppTheme.cardDark : AppTheme.cardLight,
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(
+                  color: isDark ? AppTheme.borderDark : AppTheme.borderLight,
                 ),
-                const SizedBox(height: 8),
-                Text(
-                  _supportEmail,
-                  style: TextStyle(
-                    fontSize: 17,
-                    fontWeight: FontWeight.w700,
-                    color: isDark ? Colors.white : AppTheme.textPrimary,
+                boxShadow: AppTheme.elevation(context, strength: 0.5),
+              ),
+              child: Column(
+                children: [
+                  const Text(
+                    'SUPPORT EMAIL',
+                    style: TextStyle(
+                      fontSize: 11,
+                      fontWeight: FontWeight.w700,
+                      letterSpacing: 1,
+                      color: AppTheme.textSecondary,
+                    ),
                   ),
-                ),
-                const SizedBox(height: 18),
-                Row(
-                  children: [
-                    Expanded(
-                      child: ElevatedButton.icon(
-                        onPressed: () => _emailUs(context),
-                        icon: const Icon(Icons.email_outlined, size: 18),
-                        label: const Text('Email Us'),
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: AppTheme.primary,
-                          foregroundColor: Colors.white,
-                          padding: const EdgeInsets.symmetric(vertical: 13),
+                  const SizedBox(height: 8),
+                  Text(
+                    _supportEmail,
+                    style: TextStyle(
+                      fontSize: 17,
+                      fontWeight: FontWeight.w700,
+                      color: isDark ? Colors.white : AppTheme.textPrimary,
+                    ),
+                  ),
+                  const SizedBox(height: 18),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: ElevatedButton.icon(
+                          onPressed: () => _emailUs(context),
+                          icon: const Icon(Icons.email_outlined, size: 18),
+                          label: const Text('Email Us'),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: AppTheme.primary,
+                            foregroundColor: Colors.white,
+                            padding: const EdgeInsets.symmetric(vertical: 13),
+                          ),
                         ),
                       ),
-                    ),
-                    const SizedBox(width: 10),
-                    Expanded(
-                      child: OutlinedButton.icon(
-                        onPressed: () => _copyEmail(context),
-                        icon: const Icon(Icons.copy_rounded, size: 16),
-                        label: const Text('Copy'),
-                        style: OutlinedButton.styleFrom(
-                          padding: const EdgeInsets.symmetric(vertical: 13),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: OutlinedButton.icon(
+                          onPressed: () => _copyEmail(context),
+                          icon: const Icon(Icons.copy_rounded, size: 16),
+                          label: const Text('Copy'),
+                          style: OutlinedButton.styleFrom(
+                            padding: const EdgeInsets.symmetric(vertical: 13),
+                          ),
                         ),
                       ),
-                    ),
-                  ],
-                ),
-              ],
+                    ],
+                  ),
+                ],
+              ),
             ),
           ),
           const SizedBox(height: 18),
           Text(
             'We typically reply within 24–48 hours.',
             textAlign: TextAlign.center,
-            style: TextStyle(fontSize: 12, color: AppTheme.textSecondary.withOpacity(0.8)),
+            style: TextStyle(
+              fontSize: 12,
+              color: AppTheme.textSecondary.withOpacity(0.8),
+            ),
           ),
         ],
       ),

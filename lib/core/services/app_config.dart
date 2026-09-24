@@ -1,20 +1,5 @@
-// lib/core/services/app_config.dart
-//
-// All config values come from --dart-define at build time.
-// They are baked into the compiled binary — no .env file loading, no 404 errors.
-//
-// HOW TO BUILD:
-//   flutter build web --release \
-//     --dart-define=BACKEND_URL=https://resume-ai-backend-bwzx.onrender.com \
-//     --dart-define=RAZORPAY_KEY_ID=rzp_test_xxx \
-//     --dart-define=ADMIN_EMAIL=you@gmail.com \
-//     --dart-define=ADMIN_NAME=Vishesh \
-//     --dart-define=EMAILJS_PUBLIC_KEY=xxx \
-//     --dart-define=EMAILJS_SERVICE_ID=service_xxx \
-//     --dart-define=EMAILJS_TEMPLATE_ID=template_xxx \
-//     --dart-define=EMAILJS_HUMAN_REVIEW_TEMPLATE_ID=template_xxx
-//
-// VS Code: add all --dart-define lines to .vscode/launch.json toolArgs.
+import 'package:flutter/foundation.dart'
+    show defaultTargetPlatform, TargetPlatform, kIsWeb;
 
 class AppConfig {
   AppConfig._();
@@ -58,6 +43,46 @@ class AppConfig {
     'EMAILJS_HUMAN_REVIEW_TEMPLATE_ID',
     defaultValue: '',
   );
+
+  // ── AdMob (rewarded ads — app builds only; ignored entirely on web) ───────
+  // Defaults are Google's official TEST rewarded ad unit IDs. They always
+  // serve a real, functioning test ad, so the whole "watch ad to unlock"
+  // flow works out of the box in debug builds without any setup.
+  //
+  // Before a release/production build, override both with your own AdMob
+  // rewarded ad unit IDs:
+  //   --dart-define=ADMOB_REWARDED_AD_UNIT_ID_ANDROID=ca-app-pub-xxx/xxx
+  //   --dart-define=ADMOB_REWARDED_AD_UNIT_ID_IOS=ca-app-pub-xxx/xxx
+  // ...and set your real AdMob App ID natively (this can't be done via
+  // --dart-define):
+  //   android/app/src/main/AndroidManifest.xml → APPLICATION_ID meta-data
+  //   ios/Runner/Info.plist → GADApplicationIdentifier
+  static const _admobRewardedAdUnitIdAndroid = String.fromEnvironment(
+    'ADMOB_REWARDED_AD_UNIT_ID_ANDROID',
+    // Real production rewarded ad unit ID (Android), from the AdMob
+    // console. Override at build time with --dart-define if you ever need
+    // a different one (e.g. a staging unit) without editing this file.
+    defaultValue: 'ca-app-pub-5737850023326024/9261204462',
+  );
+  static const _admobRewardedAdUnitIdIOS = String.fromEnvironment(
+    'ADMOB_REWARDED_AD_UNIT_ID_IOS',
+    // No iOS rewarded ad unit ID was provided yet, so this still falls
+    // back to Google's test ID — replace with a real one via
+    // --dart-define=ADMOB_REWARDED_AD_UNIT_ID_IOS=... once you create an
+    // iOS rewarded ad unit in the AdMob console, or iOS builds will only
+    // ever serve test ads.
+    defaultValue: 'ca-app-pub-3940256099942544/1712485313', // Google test ID
+  );
+
+  /// The rewarded ad unit ID for the current platform. Only meaningful on
+  /// Android/iOS — ads are never requested on web (see AdService/
+  /// ad_service_web_stub.dart), so this is never read there.
+  static String get admobRewardedAdUnitId {
+    if (kIsWeb) return '';
+    return defaultTargetPlatform == TargetPlatform.iOS
+        ? _admobRewardedAdUnitIdIOS
+        : _admobRewardedAdUnitIdAndroid;
+  }
 
   // ── Validation (call at startup to catch missing keys early) ──────────────
   static bool get isEmailConfigured =>

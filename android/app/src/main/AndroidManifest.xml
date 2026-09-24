@@ -47,6 +47,13 @@
             android:name="flutterEmbedding"
             android:value="2"/>
 
+        <!-- AdMob App ID (real production ID) — required for the
+             google_mobile_ads SDK to initialize at all. Without this the
+             app crashes on startup once the plugin is added. -->
+        <meta-data
+            android:name="com.google.android.gms.ads.APPLICATION_ID"
+            android:value="ca-app-pub-5737850023326024~9360470911"/>
+
     </application>
 
     <queries>

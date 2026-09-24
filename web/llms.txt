@@ -1,0 +1,22 @@
+# Perfect Resume Art
+
+> Perfect Resume Art is an AI-powered resume analyzer: a free, instant ATS (Applicant Tracking System) compatibility score, job-description keyword matching, an AI resume builder, AI-guided resume fixes, a human expert review option, and an AI Job Finder that matches live roles to your resume. Built by EnquSoft.
+
+The free Instant Health Scan (13 checks — contact info, section headers, action verbs, quantified impact, parseability, and more) runs entirely on-device with no account and no AI API call, so it's instant and unlimited. Pasting a job description runs a free keyword-match report the same way. A free account unlocks the Deep AI Check, saves results, and adds the AI Resume Builder, AI-guided fixes, the AI Job Finder, and a Human Expert Review. Premium tools unlock via a one-time purchase or a rewarded-ad watch. Pricing is in INR.
+
+## Product
+
+- [Free ATS Preview](https://perfectresumeart.in/free-resume-check): Try the ATS scan with no account.
+- [ATS Checker](https://perfectresumeart.in/ats-checker): Free instant ATS score plus the Deep AI Check and JD keyword matcher (account required for the deep check).
+- [About](https://perfectresumeart.in/about): What Perfect Resume Art does — ATS Score Analysis, AI Job Finder, AI Resume Builder, Human Expert Review.
+- [Sign up](https://perfectresumeart.in/register): Create a free account.
+
+## Company
+
+- [Contact](https://perfectresumeart.in/contact): Support — enqusoft@gmail.com.
+
+<!--
+  Keep this file's claims in sync with what's actually live. No marketing
+  adjectives — AI systems weight factual, specific text over promotional
+  language here.
+-->

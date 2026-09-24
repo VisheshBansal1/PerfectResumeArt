@@ -6,6 +6,8 @@ import 'package:go_router/go_router.dart';
 
 import '../../../core/constants/app_theme.dart';
 import '../../../core/router/app_router.dart';
+import '../../../core/widgets/motion.dart';
+import '../../../core/widgets/scanning_overlay.dart';
 import '../../../models/models.dart';
 import '../../../providers/providers.dart';
 import '../../../providers/resume_context_provider.dart';
@@ -437,7 +439,8 @@ class _UploadResumeScreenState extends ConsumerState<UploadResumeScreen>
   /// Bytes for analysis, preferring what was just picked in this screen but
   /// falling back to whatever's already in the shared context (e.g. the user
   /// uploaded via ATS Checker earlier and came here without re-uploading).
-  Uint8List? get _resolvedBytes => _currentInput?.bytes ?? ref.read(resumeContextProvider).pdfBytes;
+  Uint8List? get _resolvedBytes =>
+      _currentInput?.bytes ?? ref.read(resumeContextProvider).pdfBytes;
 
   String get _resolvedFileName {
     if (_currentInput?.fileName != null) return _currentInput!.fileName!;
@@ -463,7 +466,9 @@ class _UploadResumeScreenState extends ConsumerState<UploadResumeScreen>
       return;
     }
     setState(() => _errorFromTabIndex = 0);
-    final analysisId = await ref.read(resumeUploadProvider.notifier).uploadAndAnalyzeFromBytes(
+    final analysisId = await ref
+        .read(resumeUploadProvider.notifier)
+        .uploadAndAnalyzeFromBytes(
           bytes: bytes,
           fileName: _resolvedFileName,
           extension: _resolvedExtension,
@@ -490,7 +495,9 @@ class _UploadResumeScreenState extends ConsumerState<UploadResumeScreen>
       return;
     }
     setState(() => _errorFromTabIndex = 1);
-    final analysisId = await ref.read(resumeUploadProvider.notifier).uploadAndAnalyzeCustomFromBytes(
+    final analysisId = await ref
+        .read(resumeUploadProvider.notifier)
+        .uploadAndAnalyzeCustomFromBytes(
           bytes: bytes,
           fileName: _resolvedFileName,
           extension: _resolvedExtension,
@@ -539,7 +546,8 @@ class _UploadResumeScreenState extends ConsumerState<UploadResumeScreen>
   Widget build(BuildContext context) {
     final uploadState = ref.watch(resumeUploadProvider);
     final ctx = ref.watch(resumeContextProvider);
-    final showPanel = (_currentInput?.bytes == null && !ctx.hasPdf) || _changingResume;
+    final showPanel =
+        (_currentInput?.bytes == null && !ctx.hasPdf) || _changingResume;
 
     return Scaffold(
       appBar: AppBar(
@@ -560,44 +568,58 @@ class _UploadResumeScreenState extends ConsumerState<UploadResumeScreen>
         children: [
           Padding(
             padding: const EdgeInsets.fromLTRB(20, 16, 20, 4),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const Text('Your Resume', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700)),
-                const SizedBox(height: 4),
-                Text(
-                  'Shared across both tabs — upload once, switch freely',
-                  style: TextStyle(fontSize: 11.5, color: AppTheme.textSecondary),
-                ),
-                const SizedBox(height: 10),
-                if (!showPanel)
-                  LoadedResumeCard(
-                    onChangeRequested: () => setState(() => _changingResume = true),
-                    onRemoved: () => setState(() => _currentInput = null),
-                  )
-                else ...[
-                  ResumeInputPanel(
-                    accentColor: AppTheme.primary,
-                    source: 'upload_resume',
-                    allowPaste: false, // job-matched & custom-tech analysis need real file bytes
-                    onResumeReady: (result) => setState(() {
-                      _currentInput = result;
-                      _changingResume = false;
-                      _errorFromTabIndex = null;
-                    }),
-                    onCleared: () => setState(() => _currentInput = null),
+            child: FadeSlideIn(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text(
+                    'Your Resume',
+                    style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700),
                   ),
-                  if (ctx.hasPdf && _changingResume) ...[
-                    const SizedBox(height: 8),
-                    Center(
-                      child: TextButton(
-                        onPressed: () => setState(() => _changingResume = false),
-                        child: const Text('Cancel', style: TextStyle(fontSize: 12.5)),
-                      ),
+                  const SizedBox(height: 4),
+                  Text(
+                    'Shared across both tabs — upload once, switch freely',
+                    style: TextStyle(
+                      fontSize: 11.5,
+                      color: AppTheme.textSecondary,
                     ),
+                  ),
+                  const SizedBox(height: 10),
+                  if (!showPanel)
+                    LoadedResumeCard(
+                      onChangeRequested: () =>
+                          setState(() => _changingResume = true),
+                      onRemoved: () => setState(() => _currentInput = null),
+                    )
+                  else ...[
+                    ResumeInputPanel(
+                      accentColor: AppTheme.primary,
+                      source: 'upload_resume',
+                      allowPaste:
+                          false, // job-matched & custom-tech analysis need real file bytes
+                      onResumeReady: (result) => setState(() {
+                        _currentInput = result;
+                        _changingResume = false;
+                        _errorFromTabIndex = null;
+                      }),
+                      onCleared: () => setState(() => _currentInput = null),
+                    ),
+                    if (ctx.hasPdf && _changingResume) ...[
+                      const SizedBox(height: 8),
+                      Center(
+                        child: TextButton(
+                          onPressed: () =>
+                              setState(() => _changingResume = false),
+                          child: const Text(
+                            'Cancel',
+                            style: TextStyle(fontSize: 12.5),
+                          ),
+                        ),
+                      ),
+                    ],
                   ],
                 ],
-              ],
+              ),
             ),
           ),
           const Divider(height: 1),
@@ -749,105 +771,113 @@ class _UploadResumeScreenState extends ConsumerState<UploadResumeScreen>
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-          Row(
-            children: [
-              Icon(Icons.star_rounded, color: AppTheme.accent, size: 14),
-              const SizedBox(width: 6),
-              const Text(
-                'Required Technologies / Skills *',
-                style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13),
-              ),
-            ],
-          ),
-          const SizedBox(height: 8),
-
-          // Skill input row
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.center,
-            children: [
-              Expanded(
-                child: TextField(
-                  controller: _customSkillCtrl,
-                  decoration: InputDecoration(
-                    hintText: 'Type a skill and press +',
-                    contentPadding: const EdgeInsets.symmetric(
-                      horizontal: 12,
-                      vertical: 12,
-                    ),
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                    focusedBorder: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(8),
-                      borderSide: const BorderSide(
-                        color: AppTheme.accent,
-                        width: 1.5,
+                Row(
+                  children: [
+                    Icon(Icons.star_rounded, color: AppTheme.accent, size: 14),
+                    const SizedBox(width: 6),
+                    const Text(
+                      'Required Technologies / Skills *',
+                      style: TextStyle(
+                        fontWeight: FontWeight.w600,
+                        fontSize: 13,
                       ),
                     ),
-                  ),
-                  onSubmitted: (_) => _addCustomSkill(),
+                  ],
                 ),
-              ),
-              const SizedBox(width: 8),
-              SizedBox(
-                height: 46,
-                width: 46,
-                child: ElevatedButton(
-                  onPressed: _addCustomSkill,
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: AppTheme.accent,
-                    foregroundColor: Colors.white,
-                    padding: EdgeInsets.zero,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                    elevation: 0,
-                  ),
-                  child: const Icon(Icons.add, size: 20),
-                ),
-              ),
-            ],
-          ),
+                const SizedBox(height: 8),
 
-          // Added skill chips
-          if (_customSkills.isNotEmpty) ...[
-            const SizedBox(height: 12),
-            Wrap(
-              spacing: 8,
-              runSpacing: 6,
-              children: _customSkills
-                  .map(
-                    (skill) => Chip(
-                      label: Text(
-                        skill,
-                        style: TextStyle(
-                          fontSize: 12,
-                          color: AppTheme.accent,
-                          fontWeight: FontWeight.w500,
+                // Skill input row
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.center,
+                  children: [
+                    Expanded(
+                      child: TextField(
+                        controller: _customSkillCtrl,
+                        decoration: InputDecoration(
+                          hintText: 'Type a skill and press +',
+                          contentPadding: const EdgeInsets.symmetric(
+                            horizontal: 12,
+                            vertical: 12,
+                          ),
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          focusedBorder: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(8),
+                            borderSide: const BorderSide(
+                              color: AppTheme.accent,
+                              width: 1.5,
+                            ),
+                          ),
                         ),
+                        onSubmitted: (_) => _addCustomSkill(),
                       ),
-                      backgroundColor: AppTheme.accent.withOpacity(0.08),
-                      side: BorderSide(color: AppTheme.accent.withOpacity(0.3)),
-                      deleteIcon: Icon(
-                        Icons.close,
-                        size: 14,
-                        color: AppTheme.accent,
-                      ),
-                      onDeleted: () =>
-                          setState(() => _customSkills.remove(skill)),
-                      visualDensity: VisualDensity.compact,
-                      padding: const EdgeInsets.symmetric(horizontal: 4),
                     ),
-                  )
-                  .toList(),
-            ),
-          ] else ...[
-            const SizedBox(height: 8),
-            Text(
-              'Add the technologies you want to check against (e.g. React, Node.js, PostgreSQL)',
-              style: TextStyle(fontSize: 12, color: AppTheme.textSecondary),
-            ),
-          ],
+                    const SizedBox(width: 8),
+                    SizedBox(
+                      height: 46,
+                      width: 46,
+                      child: ElevatedButton(
+                        onPressed: _addCustomSkill,
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: AppTheme.accent,
+                          foregroundColor: Colors.white,
+                          padding: EdgeInsets.zero,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          elevation: 0,
+                        ),
+                        child: const Icon(Icons.add, size: 20),
+                      ),
+                    ),
+                  ],
+                ),
+
+                // Added skill chips
+                if (_customSkills.isNotEmpty) ...[
+                  const SizedBox(height: 12),
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 6,
+                    children: _customSkills
+                        .map(
+                          (skill) => Chip(
+                            label: Text(
+                              skill,
+                              style: TextStyle(
+                                fontSize: 12,
+                                color: AppTheme.accent,
+                                fontWeight: FontWeight.w500,
+                              ),
+                            ),
+                            backgroundColor: AppTheme.accent.withOpacity(0.08),
+                            side: BorderSide(
+                              color: AppTheme.accent.withOpacity(0.3),
+                            ),
+                            deleteIcon: Icon(
+                              Icons.close,
+                              size: 14,
+                              color: AppTheme.accent,
+                            ),
+                            onDeleted: () =>
+                                setState(() => _customSkills.remove(skill)),
+                            visualDensity: VisualDensity.compact,
+                            padding: const EdgeInsets.symmetric(horizontal: 4),
+                          ),
+                        )
+                        .toList(),
+                  ),
+                ] else ...[
+                  const SizedBox(height: 8),
+                  Text(
+                    'Add the technologies you want to check against (e.g. React, Node.js, PostgreSQL)',
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: AppTheme.textSecondary,
+                    ),
+                  ),
+                ],
               ],
             ),
           ),
@@ -1091,13 +1121,16 @@ class _UploadResumeScreenState extends ConsumerState<UploadResumeScreen>
           border: Border.all(
             color: _selectedJob == null
                 ? AppTheme.warning.withOpacity(0.5)
-                : AppTheme.borderLight,
+                : AppTheme.border(context),
             width: _selectedJob == null ? 1.5 : 1,
           ),
           borderRadius: BorderRadius.circular(10),
           color: _selectedJob == null
               ? AppTheme.warning.withOpacity(0.02)
               : null,
+          boxShadow: _selectedJob == null
+              ? null
+              : AppTheme.elevation(context, strength: 0.4),
         ),
         child: Row(
           children: [
@@ -1248,7 +1281,8 @@ class _UploadResumeScreenState extends ConsumerState<UploadResumeScreen>
     // Checks both this screen's own extraction AND the shared context, so a resume
     // already loaded from another screen (e.g. ATS Checker) works here too.
     final bool hasText =
-        (uploadState.extractedText != null && uploadState.extractedText!.trim().length > 50) ||
+        (uploadState.extractedText != null &&
+            uploadState.extractedText!.trim().length > 50) ||
         ref.read(resumeContextProvider).hasResume;
     if (tabIndex == 0) {
       canAnalyze = hasFile && hasText && _selectedJob != null;
@@ -1261,33 +1295,49 @@ class _UploadResumeScreenState extends ConsumerState<UploadResumeScreen>
     }
 
     final bool isBusy = uploadState.isExtracting || uploadState.isAnalyzing;
+    final String statusLabel = uploadState.isExtracting
+        ? 'Extracting text…'
+        : uploadState.isAnalyzing
+        ? 'AI is analyzing…'
+        : 'Analyze Resume';
 
-    return SizedBox(
-      width: double.infinity,
-      child: ElevatedButton.icon(
-        onPressed: canAnalyze && !isBusy ? onPressed : null,
-        style: ElevatedButton.styleFrom(
-          backgroundColor: tabColor,
-          disabledBackgroundColor: tabColor.withOpacity(0.35),
+    return Column(
+      children: [
+        SizedBox(
+          width: double.infinity,
+          child: ElevatedButton.icon(
+            onPressed: canAnalyze && !isBusy ? onPressed : null,
+            style: ElevatedButton.styleFrom(
+              backgroundColor: tabColor,
+              disabledBackgroundColor: tabColor.withOpacity(0.35),
+            ),
+            icon: isBusy
+                ? const SizedBox(
+                    height: 18,
+                    width: 18,
+                    child: CircularProgressIndicator(
+                      color: Colors.white,
+                      strokeWidth: 2,
+                    ),
+                  )
+                : const Icon(Icons.auto_awesome),
+            label: Text(statusLabel),
+          ),
         ),
-        icon: isBusy
-            ? const SizedBox(
-                height: 18,
-                width: 18,
-                child: CircularProgressIndicator(
-                  color: Colors.white,
-                  strokeWidth: 2,
-                ),
-              )
-            : const Icon(Icons.auto_awesome),
-        label: Text(
-          uploadState.isExtracting
-              ? 'Extracting text…'
-              : uploadState.isAnalyzing
-              ? 'AI is analyzing…'
-              : 'Analyze Resume',
+        AnimatedSwitcher(
+          duration: const Duration(milliseconds: 250),
+          child: isBusy
+              ? Padding(
+                  key: const ValueKey('scanning'),
+                  padding: const EdgeInsets.only(top: 28, bottom: 8),
+                  child: ScanningOverlay(
+                    label: statusLabel,
+                    icon: Icons.auto_awesome,
+                  ),
+                )
+              : const SizedBox.shrink(key: ValueKey('idle')),
         ),
-      ),
+      ],
     );
   }
 

@@ -12,11 +12,17 @@ import '../../../providers/premium_providers.dart';
 import '../../../providers/resume_context_provider.dart';
 import '../widgets/loaded_resume_card.dart';
 import '../widgets/resume_input_panel.dart';
+import '../widgets/interview_prep_premium_widgets.dart'
+    show FadeSlideIn, CountUpNumber, AnalyzingStepsLoader;
 
 /// Free: paste a resume + a job description, get a full fit analysis and
 /// 5 sample interview questions. Paid (₹39, one-time, unlocked forever for
 /// this account — same model as Fix My Resume): the remaining ~15 questions
 /// plus a downloadable PDF of the whole report.
+///
+/// Layout/colors are intentionally plain — every section below is wrapped
+/// in [FadeSlideIn] with a staggered delay so the animation layer is the
+/// focus, without changing a single widget's position or styling.
 class InterviewPrepScreen extends ConsumerStatefulWidget {
   const InterviewPrepScreen({super.key});
 
@@ -29,6 +35,15 @@ class _InterviewPrepScreenState extends ConsumerState<InterviewPrepScreen> {
   final _jdController = TextEditingController();
   ResumeInputResult? _currentInput;
   bool _changingResume = false;
+
+  // Local, per-session only — set when the user watches a rewarded ad
+  // instead of paying. Never persisted to unlockProvider/Firestore, so it
+  // grants this one visit's use of the feature only.
+  bool _adUnlockedThisSession = false;
+
+  // Tight, consistent stagger step used across every FadeSlideIn below.
+  static const _stagger = Duration(milliseconds: 45);
+  Duration _delay(int step) => _stagger * step;
 
   @override
   void dispose() {
@@ -70,16 +85,19 @@ class _InterviewPrepScreenState extends ConsumerState<InterviewPrepScreen> {
     required String userEmail,
     required String userName,
   }) async {
-    final paid = await PaywallSheet.show(
+    final result = await PaywallSheet.show(
       context,
       plan: PaymentPlan.interviewPrep,
       userEmail: userEmail,
       userName: userName,
     );
-    if (paid && mounted) {
+    if (!mounted || result == PaywallResult.cancelled) return;
+    if (result == PaywallResult.purchased) {
       await ref.read(unlockProvider.notifier).unlock('interview_prep');
-      await ref.read(jobFitReportProvider.notifier).unlockFullReport();
+    } else if (result == PaywallResult.watchedAd) {
+      setState(() => _adUnlockedThisSession = true);
     }
+    await ref.read(jobFitReportProvider.notifier).unlockFullReport();
   }
 
   @override
@@ -87,7 +105,9 @@ class _InterviewPrepScreenState extends ConsumerState<InterviewPrepScreen> {
     final resumeCtx = ref.watch(resumeContextProvider);
     final showPanel = !resumeCtx.hasResume || _changingResume;
     final state = ref.watch(jobFitReportProvider);
-    final unlocked = ref.watch(unlockProvider).contains('interview_prep');
+    final unlocked =
+        ref.watch(unlockProvider).contains('interview_prep') ||
+        _adUnlockedThisSession;
     final userAsync = ref.watch(currentUserProvider);
     final user = userAsync.asData?.value;
     final userEmail = user?.email ?? '';
@@ -145,6 +165,10 @@ class _InterviewPrepScreenState extends ConsumerState<InterviewPrepScreen> {
             const SizedBox(height: 20),
             _buildAnalyzeButton(state),
             if (state.error != null) _buildError(state.error!),
+            if (state.isLoading) ...[
+              const SizedBox(height: 20),
+              const AnalyzingStepsLoader(),
+            ],
             if (state.report != null) ...[
               const SizedBox(height: 28),
               _buildResults(state, unlocked, userEmail, userName),
@@ -284,180 +308,279 @@ class _InterviewPrepScreenState extends ConsumerState<InterviewPrepScreen> {
     String userName,
   ) {
     final report = state.report!;
+    final hasExpEduProj =
+        report.experienceMatch.isNotEmpty ||
+        report.educationMatch.isNotEmpty ||
+        report.projectAnalysis.isNotEmpty;
+    final hasStrengthsWeaknesses =
+        report.strengths.isNotEmpty || report.weaknesses.isNotEmpty;
+
+    // Every delay is precomputed as a plain value below (not mutated inside
+    // the widget list itself) so the cascade order is easy to follow and
+    // impossible to get wrong by mixing side effects into a collection.
+    int step = 0;
+    int next() => step++;
+
+    final scoreDelay = _delay(next());
+    final checklistDelay = _delay(next());
+    final summaryDelay = _delay(next());
+    final atsDelay = _delay(next());
+    final skillMatchDelay = _delay(next());
+    final missingSkillsDelay = _delay(next());
+    final expEduProjDelay = hasExpEduProj ? _delay(next()) : Duration.zero;
+    final strengthsWeaknessesDelay = hasStrengthsWeaknesses
+        ? _delay(next())
+        : Duration.zero;
+    final improvementsDelay = _delay(next());
+    final selectionProbDelay = _delay(next());
+    final questionsHeaderDelay = _delay(next());
+    // Every question card shares this base, offset a little further per
+    // index — a tight cascade down the list rather than one big jump.
+    final questionsBaseDelay = _delay(step);
+    final afterQuestionsDelay =
+        questionsBaseDelay +
+        Duration(milliseconds: 18 * report.interviewQuestions.length) +
+        _stagger;
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        _buildScoreHeader(report),
+        FadeSlideIn(delay: scoreDelay, child: _buildScoreHeader(report)),
         const SizedBox(height: 10),
-        _buildChecklistRow(),
+        FadeSlideIn(delay: checklistDelay, child: _buildChecklistRow()),
         const SizedBox(height: 26),
 
-        _sectionTitle('Summary'),
-        _card(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              if (report.recommendation.isNotEmpty) ...[
-                Text(
-                  report.recommendation,
-                  style: const TextStyle(
-                    fontWeight: FontWeight.w700,
-                    color: AppTheme.primary,
-                    fontSize: 14,
-                  ),
-                ),
-                const SizedBox(height: 6),
-              ],
-              Text(
-                report.summary,
-                style: const TextStyle(fontSize: 13.5, height: 1.5, color: Colors.black),
-              ),
-            ],
-          ),
-        ),
-        const SizedBox(height: 20),
-
-        _sectionTitle('ATS Report'),
-        _buildAtsGrid(report.atsAnalysis),
-        const SizedBox(height: 20),
-
-        _sectionTitle('Skill Match'),
-        _chipSection(
-          report.skillsMatched,
-          AppTheme.success,
-          emptyText: 'No direct matches found.',
-        ),
-        const SizedBox(height: 20),
-
-        _sectionTitle('Missing Skills'),
-        _chipSection(
-          report.skillsMissing,
-          AppTheme.error,
-          emptyText: 'No major gaps found.',
-        ),
-        if (report.topMissingKeywords.isNotEmpty) ...[
-          const SizedBox(height: 12),
-          const Text(
-            'Top missing keywords',
-            style: TextStyle(
-              fontSize: 12,
-              color: AppTheme.textSecondary,
-              fontWeight: FontWeight.w600,
-            ),
-          ),
-          const SizedBox(height: 6),
-          _chipSection(report.topMissingKeywords, AppTheme.warning),
-        ],
-        const SizedBox(height: 20),
-
-        if (report.experienceMatch.isNotEmpty ||
-            report.educationMatch.isNotEmpty ||
-            report.projectAnalysis.isNotEmpty) ...[
-          _sectionTitle('Experience, Education & Projects'),
-          _card(
+        FadeSlideIn(delay: summaryDelay, child: _sectionTitle('Summary')),
+        FadeSlideIn(
+          delay: summaryDelay,
+          child: _card(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                if (report.experienceMatch.isNotEmpty)
-                  _labeledLine('Experience', report.experienceMatch),
-                if (report.educationMatch.isNotEmpty)
-                  _labeledLine('Education', report.educationMatch),
-                if (report.projectAnalysis.isNotEmpty)
-                  _labeledLine('Projects', report.projectAnalysis),
+                if (report.recommendation.isNotEmpty) ...[
+                  Text(
+                    report.recommendation,
+                    style: const TextStyle(
+                      fontWeight: FontWeight.w700,
+                      color: AppTheme.primary,
+                      fontSize: 14,
+                    ),
+                  ),
+                  const SizedBox(height: 6),
+                ],
+                Text(
+                  report.summary,
+                  style: const TextStyle(
+                    fontSize: 13.5,
+                    height: 1.5,
+                    color: Colors.black,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+        const SizedBox(height: 20),
+
+        FadeSlideIn(delay: atsDelay, child: _sectionTitle('ATS Report')),
+        FadeSlideIn(delay: atsDelay, child: _buildAtsGrid(report.atsAnalysis)),
+        const SizedBox(height: 20),
+
+        FadeSlideIn(
+          delay: skillMatchDelay,
+          child: _sectionTitle('Skill Match'),
+        ),
+        FadeSlideIn(
+          delay: skillMatchDelay,
+          child: _chipSection(
+            report.skillsMatched,
+            AppTheme.success,
+            emptyText: 'No direct matches found.',
+          ),
+        ),
+        const SizedBox(height: 20),
+
+        FadeSlideIn(
+          delay: missingSkillsDelay,
+          child: _sectionTitle('Missing Skills'),
+        ),
+        FadeSlideIn(
+          delay: missingSkillsDelay,
+          child: _chipSection(
+            report.skillsMissing,
+            AppTheme.error,
+            emptyText: 'No major gaps found.',
+          ),
+        ),
+        if (report.topMissingKeywords.isNotEmpty) ...[
+          const SizedBox(height: 12),
+          FadeSlideIn(
+            delay: missingSkillsDelay,
+            child: const Text(
+              'Top missing keywords',
+              style: TextStyle(
+                fontSize: 12,
+                color: AppTheme.textSecondary,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ),
+          const SizedBox(height: 6),
+          FadeSlideIn(
+            delay: missingSkillsDelay,
+            child: _chipSection(report.topMissingKeywords, AppTheme.warning),
+          ),
+        ],
+        const SizedBox(height: 20),
+
+        if (hasExpEduProj) ...[
+          FadeSlideIn(
+            delay: expEduProjDelay,
+            child: _sectionTitle('Experience, Education & Projects'),
+          ),
+          FadeSlideIn(
+            delay: expEduProjDelay,
+            child: _card(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  if (report.experienceMatch.isNotEmpty)
+                    _labeledLine('Experience', report.experienceMatch),
+                  if (report.educationMatch.isNotEmpty)
+                    _labeledLine('Education', report.educationMatch),
+                  if (report.projectAnalysis.isNotEmpty)
+                    _labeledLine('Projects', report.projectAnalysis),
+                ],
+              ),
+            ),
+          ),
+          const SizedBox(height: 20),
+        ],
+
+        if (hasStrengthsWeaknesses) ...[
+          FadeSlideIn(
+            delay: strengthsWeaknessesDelay,
+            child: _sectionTitle('Strengths & Weaknesses'),
+          ),
+          FadeSlideIn(
+            delay: strengthsWeaknessesDelay,
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                if (report.strengths.isNotEmpty)
+                  Expanded(
+                    child: _bulletCard(
+                      'Strengths',
+                      report.strengths,
+                      AppTheme.success,
+                    ),
+                  ),
+                if (report.strengths.isNotEmpty && report.weaknesses.isNotEmpty)
+                  const SizedBox(width: 10),
+                if (report.weaknesses.isNotEmpty)
+                  Expanded(
+                    child: _bulletCard(
+                      'Watch out for',
+                      report.weaknesses,
+                      AppTheme.error,
+                    ),
+                  ),
               ],
             ),
           ),
           const SizedBox(height: 20),
         ],
 
-        if (report.strengths.isNotEmpty || report.weaknesses.isNotEmpty) ...[
-          _sectionTitle('Strengths & Weaknesses'),
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              if (report.strengths.isNotEmpty)
-                Expanded(
-                  child: _bulletCard(
-                    'Strengths',
-                    report.strengths,
-                    AppTheme.success,
-                  ),
-                ),
-              if (report.strengths.isNotEmpty && report.weaknesses.isNotEmpty)
-                const SizedBox(width: 10),
-              if (report.weaknesses.isNotEmpty)
-                Expanded(
-                  child: _bulletCard(
-                    'Watch out for',
-                    report.weaknesses,
-                    AppTheme.error,
-                  ),
-                ),
-            ],
-          ),
-          const SizedBox(height: 20),
-        ],
-
-        _sectionTitle('Resume Improvements'),
-        _bulletCard(null, report.resumeImprovements, AppTheme.accent),
+        FadeSlideIn(
+          delay: improvementsDelay,
+          child: _sectionTitle('Resume Improvements'),
+        ),
+        FadeSlideIn(
+          delay: improvementsDelay,
+          child: _bulletCard(null, report.resumeImprovements, AppTheme.accent),
+        ),
         const SizedBox(height: 20),
 
-        _sectionTitle('Selection Probability'),
-        _card(
-          child: Text(
-            report.selectionProbability,
-            style: const TextStyle(
-              fontSize: 13.5,
-              fontWeight: FontWeight.w600,
-              color: AppTheme.primary,
+        FadeSlideIn(
+          delay: selectionProbDelay,
+          child: _sectionTitle('Selection Probability'),
+        ),
+        FadeSlideIn(
+          delay: selectionProbDelay,
+          child: _card(
+            child: Text(
+              report.selectionProbability,
+              style: const TextStyle(
+                fontSize: 13.5,
+                fontWeight: FontWeight.w600,
+                color: AppTheme.primary,
+              ),
             ),
           ),
         ),
         const SizedBox(height: 30),
 
-        Row(
-          children: [
-            const Text(
-              'Interview Questions',
-              style: TextStyle(fontSize: 15.5, fontWeight: FontWeight.w700),
-            ),
-            const Spacer(),
-            Text(
-              report.isFullyUnlocked
-                  ? '${report.interviewQuestions.length} questions'
-                  : '${report.interviewQuestions.length} of 20',
-              style: const TextStyle(
-                fontSize: 12,
-                color: AppTheme.textSecondary,
+        FadeSlideIn(
+          delay: questionsHeaderDelay,
+          child: Row(
+            children: [
+              const Text(
+                'Interview Questions',
+                style: TextStyle(fontSize: 15.5, fontWeight: FontWeight.w700),
               ),
-            ),
-          ],
+              const Spacer(),
+              Text(
+                report.isFullyUnlocked
+                    ? '${report.interviewQuestions.length} questions'
+                    : '${report.interviewQuestions.length} of 20',
+                style: const TextStyle(
+                  fontSize: 12,
+                  color: AppTheme.textSecondary,
+                ),
+              ),
+            ],
+          ),
         ),
         const SizedBox(height: 10),
         ...report.interviewQuestions.asMap().entries.map(
-          (e) => _questionCard(e.key + 1, e.value),
+          (e) => FadeSlideIn(
+            delay: questionsBaseDelay + Duration(milliseconds: 18 * e.key),
+            child: _QuestionCard(number: e.key + 1, qa: e.value),
+          ),
         ),
 
         if (!report.isFullyUnlocked) ...[
           const SizedBox(height: 6),
-          _buildLockedPreview(),
+          FadeSlideIn(delay: afterQuestionsDelay, child: _buildLockedPreview()),
           const SizedBox(height: 16),
-          _buildUnlockCard(state, userEmail, userName),
+          FadeSlideIn(
+            delay: afterQuestionsDelay + _stagger,
+            child: _buildUnlockCard(state, userEmail, userName),
+          ),
         ] else ...[
           const SizedBox(height: 10),
           if (report.finalRecruiterAdvice.isNotEmpty) ...[
-            _sectionTitle('Final Recruiter Advice'),
-            _card(
-              color: AppTheme.primary.withOpacity(0.06),
-              borderColor: AppTheme.primary.withOpacity(0.25),
-              child: Text(
-                report.finalRecruiterAdvice,
-                style: const TextStyle(fontSize: 13.5, height: 1.5),
+            FadeSlideIn(
+              delay: afterQuestionsDelay,
+              child: _sectionTitle('Final Recruiter Advice'),
+            ),
+            FadeSlideIn(
+              delay: afterQuestionsDelay,
+              child: _card(
+                color: AppTheme.primary.withOpacity(0.06),
+                borderColor: AppTheme.primary.withOpacity(0.25),
+                child: Text(
+                  report.finalRecruiterAdvice,
+                  style: const TextStyle(fontSize: 13.5, height: 1.5),
+                ),
               ),
             ),
             const SizedBox(height: 20),
           ],
-          _buildDownloadButton(state, userName),
+          FadeSlideIn(
+            delay: afterQuestionsDelay + _stagger,
+            child: _buildDownloadButton(state, userName),
+          ),
         ],
 
         const SizedBox(height: 20),
@@ -498,8 +621,8 @@ class _InterviewPrepScreenState extends ConsumerState<InterviewPrepScreen> {
               Row(
                 crossAxisAlignment: CrossAxisAlignment.end,
                 children: [
-                  Text(
-                    '${report.overallScore}',
+                  CountUpNumber(
+                    value: report.overallScore,
                     style: TextStyle(
                       fontSize: 40,
                       fontWeight: FontWeight.bold,
@@ -677,7 +800,11 @@ class _InterviewPrepScreenState extends ConsumerState<InterviewPrepScreen> {
                       Expanded(
                         child: Text(
                           item,
-                          style: const TextStyle(fontSize: 13, height: 1.4, color: Colors.black),
+                          style: const TextStyle(
+                            fontSize: 13,
+                            height: 1.4,
+                            color: Colors.black,
+                          ),
                         ),
                       ),
                     ],
@@ -712,8 +839,8 @@ class _InterviewPrepScreenState extends ConsumerState<InterviewPrepScreen> {
         ),
         child: Column(
           children: [
-            Text(
-              '$value',
+            CountUpNumber(
+              value: value,
               style: TextStyle(
                 fontSize: 18,
                 fontWeight: FontWeight.bold,
@@ -734,75 +861,6 @@ class _InterviewPrepScreenState extends ConsumerState<InterviewPrepScreen> {
       ),
     );
   }
-
-  Color _difficultyColor(String difficulty) {
-    switch (difficulty) {
-      case 'Easy':
-        return AppTheme.success;
-      case 'Hard':
-        return AppTheme.error;
-      default:
-        return AppTheme.warning;
-    }
-  }
-
-  Widget _tag(String text, Color color) => Container(
-    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-    decoration: BoxDecoration(
-      color: color.withOpacity(0.1),
-      borderRadius: BorderRadius.circular(20),
-    ),
-    child: Text(
-      text,
-      style: TextStyle(
-        fontSize: 10.5,
-        color: color,
-        fontWeight: FontWeight.w600,
-      ),
-    ),
-  );
-
-  Widget _questionCard(int number, InterviewQA qa) => Container(
-    margin: const EdgeInsets.only(bottom: 10),
-    decoration: BoxDecoration(
-      border: Border.all(color: AppTheme.borderLight),
-      borderRadius: BorderRadius.circular(12),
-    ),
-    child: Theme(
-      data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
-      child: ExpansionTile(
-        tilePadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 2),
-        childrenPadding: const EdgeInsets.fromLTRB(14, 0, 14, 14),
-        title: Text(
-          'Q$number. ${qa.question}',
-          style: const TextStyle(
-            fontSize: 13.5,
-            fontWeight: FontWeight.w600,
-            height: 1.35,
-          ),
-        ),
-        subtitle: Padding(
-          padding: const EdgeInsets.only(top: 6),
-          child: Wrap(
-            spacing: 6,
-            children: [
-              _tag(qa.category.label, AppTheme.primary),
-              _tag(qa.difficulty, _difficultyColor(qa.difficulty)),
-            ],
-          ),
-        ),
-        children: [
-          Align(
-            alignment: Alignment.centerLeft,
-            child: Text(
-              qa.answer,
-              style: const TextStyle(fontSize: 13, height: 1.5),
-            ),
-          ),
-        ],
-      ),
-    ),
-  );
 
   Widget _buildLockedPreview() => ClipRRect(
     borderRadius: BorderRadius.circular(12),
@@ -1007,4 +1065,160 @@ class _CheckChip extends StatelessWidget {
       ],
     ),
   );
+}
+
+/// One interview question, expandable to show the model answer plus an
+/// optional "practice" field so the candidate can type their own attempt
+/// and read it right next to the best answer to see how it differs.
+class _QuestionCard extends StatefulWidget {
+  final int number;
+  final InterviewQA qa;
+  const _QuestionCard({required this.number, required this.qa});
+
+  @override
+  State<_QuestionCard> createState() => _QuestionCardState();
+}
+
+class _QuestionCardState extends State<_QuestionCard> {
+  bool _practiceMode = false;
+  final _practiceController = TextEditingController();
+
+  @override
+  void dispose() {
+    _practiceController.dispose();
+    super.dispose();
+  }
+
+  Color _difficultyColor(String difficulty) {
+    switch (difficulty) {
+      case 'Easy':
+        return AppTheme.success;
+      case 'Hard':
+        return AppTheme.error;
+      default:
+        return AppTheme.warning;
+    }
+  }
+
+  Widget _tag(String text, Color color) => Container(
+    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+    decoration: BoxDecoration(
+      color: color.withOpacity(0.1),
+      borderRadius: BorderRadius.circular(20),
+    ),
+    child: Text(
+      text,
+      style: TextStyle(
+        fontSize: 10.5,
+        color: color,
+        fontWeight: FontWeight.w600,
+      ),
+    ),
+  );
+
+  Widget _label(String text) => Text(
+    text,
+    style: const TextStyle(
+      fontSize: 10.5,
+      fontWeight: FontWeight.w700,
+      color: AppTheme.textSecondary,
+      letterSpacing: 0.3,
+    ),
+  );
+
+  @override
+  Widget build(BuildContext context) {
+    final qa = widget.qa;
+    return Container(
+      margin: const EdgeInsets.only(bottom: 10),
+      decoration: BoxDecoration(
+        border: Border.all(color: AppTheme.borderLight),
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Theme(
+        data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
+        child: ExpansionTile(
+          tilePadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 2),
+          childrenPadding: const EdgeInsets.fromLTRB(14, 0, 14, 14),
+          title: Text(
+            'Q${widget.number}. ${qa.question}',
+            style: const TextStyle(
+              fontSize: 13.5,
+              fontWeight: FontWeight.w600,
+              height: 1.35,
+            ),
+          ),
+          subtitle: Padding(
+            padding: const EdgeInsets.only(top: 6),
+            child: Wrap(
+              spacing: 6,
+              children: [
+                _tag(qa.category.label, AppTheme.primary),
+                _tag(qa.difficulty, _difficultyColor(qa.difficulty)),
+              ],
+            ),
+          ),
+          children: [
+            Align(
+              alignment: Alignment.centerLeft,
+              child: _label('Best Answer'),
+            ),
+            const SizedBox(height: 4),
+            Align(
+              alignment: Alignment.centerLeft,
+              child: Text(
+                qa.answer,
+                style: const TextStyle(fontSize: 13, height: 1.5),
+              ),
+            ),
+            const SizedBox(height: 10),
+            Align(
+              alignment: Alignment.centerLeft,
+              child: TextButton.icon(
+                onPressed: () => setState(() => _practiceMode = !_practiceMode),
+                icon: Icon(
+                  _practiceMode
+                      ? Icons.visibility_off_outlined
+                      : Icons.edit_note,
+                  size: 16,
+                ),
+                label: Text(
+                  _practiceMode ? 'Hide Practice' : 'Practice & Compare',
+                  style: const TextStyle(fontSize: 12),
+                ),
+                style: TextButton.styleFrom(
+                  foregroundColor: AppTheme.primary,
+                  padding: const EdgeInsets.symmetric(horizontal: 4),
+                  minimumSize: Size.zero,
+                  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                ),
+              ),
+            ),
+            if (_practiceMode) ...[
+              const SizedBox(height: 8),
+              _label('Your Answer'),
+              const SizedBox(height: 6),
+              TextField(
+                controller: _practiceController,
+                maxLines: 4,
+                style: const TextStyle(fontSize: 13),
+                decoration: InputDecoration(
+                  hintText:
+                      'Type your own answer, then compare it with the best answer above...',
+                  hintStyle: const TextStyle(fontSize: 12, color: Colors.black),
+                  filled: true,
+                  fillColor: AppTheme.surfaceLight,
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(10),
+                    borderSide: BorderSide.none,
+                  ),
+                  contentPadding: const EdgeInsets.all(10),
+                ),
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
 }

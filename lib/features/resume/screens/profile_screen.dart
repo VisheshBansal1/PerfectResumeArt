@@ -281,7 +281,7 @@ class ProfileScreen extends ConsumerWidget {
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(10),
           ),
-          tileColor: Colors.grey[50],
+          tileColor: AppTheme.subtleFill(context),
           leading: Container(
             width: 36,
             height: 36,
@@ -293,15 +293,11 @@ class ProfileScreen extends ConsumerWidget {
           ),
           title: const Text(
             'Analysis History',
-            style: TextStyle(
-              fontSize: 14,
-              fontWeight: FontWeight.w500,
-              color: Colors.black,
-            ),
+            style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
           ),
-          subtitle: const Text(
+          subtitle: Text(
             'View all past analyses',
-            style: TextStyle(color: Colors.black87),
+            style: TextStyle(color: AppTheme.textMuted(context)),
           ),
           trailing: const Icon(Icons.chevron_right),
           onTap: () => context.pop(),
@@ -312,7 +308,7 @@ class ProfileScreen extends ConsumerWidget {
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(10),
           ),
-          tileColor: Colors.grey[50],
+          tileColor: AppTheme.subtleFill(context),
           leading: Container(
             width: 36,
             height: 36,
@@ -328,15 +324,11 @@ class ProfileScreen extends ConsumerWidget {
           ),
           title: const Text(
             'Contact Us',
-            style: TextStyle(
-              fontSize: 14,
-              fontWeight: FontWeight.w500,
-              color: Colors.black,
-            ),
+            style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
           ),
-          subtitle: const Text(
+          subtitle: Text(
             'enqusoft@gmail.com — we reply within 24–48h',
-            style: TextStyle(color: Colors.black87),
+            style: TextStyle(color: AppTheme.textMuted(context)),
           ),
           trailing: const Icon(Icons.chevron_right),
           onTap: () => context.push(AppRoutes.contactUs),
@@ -346,7 +338,7 @@ class ProfileScreen extends ConsumerWidget {
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(10),
           ),
-          tileColor: Colors.grey[50],
+          tileColor: AppTheme.subtleFill(context),
           leading: Container(
             width: 36,
             height: 36,
@@ -358,9 +350,12 @@ class ProfileScreen extends ConsumerWidget {
           ),
           title: const Text(
             'About',
-            style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500, color: Colors.black),
+            style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
           ),
-          subtitle: const Text('About Perfect Resume Art & EnquSoft',style: TextStyle(color: Colors.black87),),
+          subtitle: Text(
+            'About Perfect Resume Art & EnquSoft',
+            style: TextStyle(color: AppTheme.textMuted(context)),
+          ),
           trailing: const Icon(Icons.chevron_right),
           onTap: () => context.push(AppRoutes.about),
         ),
@@ -370,7 +365,7 @@ class ProfileScreen extends ConsumerWidget {
             shape: RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(10),
             ),
-            tileColor: Colors.grey[50],
+            tileColor: AppTheme.subtleFill(context),
             leading: Container(
               width: 36,
               height: 36,
@@ -398,7 +393,7 @@ class ProfileScreen extends ConsumerWidget {
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(10),
           ),
-          tileColor: Colors.grey[50],
+          tileColor: AppTheme.subtleFill(context),
           leading: Container(
             width: 36,
             height: 36,
@@ -597,21 +592,21 @@ class _AttachReferralCodeCardState
         width: double.infinity,
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
         decoration: BoxDecoration(
-          color: Colors.grey[50],
+          color: AppTheme.subtleFill(context),
           borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: AppTheme.borderLight),
+          border: Border.all(color: AppTheme.border(context)),
         ),
         child: Row(
           children: [
             Icon(Icons.redeem_outlined, size: 18, color: AppTheme.primary),
             const SizedBox(width: 10),
-            const Expanded(
+            Expanded(
               child: Text(
                 'Got a referral code? Add it here',
                 style: TextStyle(
                   fontSize: 13,
                   fontWeight: FontWeight.w500,
-                  color: Colors.black,
+                  color: AppTheme.textMain(context),
                 ),
               ),
             ),

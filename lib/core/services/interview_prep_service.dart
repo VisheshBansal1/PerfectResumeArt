@@ -92,9 +92,7 @@ class InterviewQA {
     question: (map['question'] as String? ?? '').trim(),
     answer: (map['answer'] as String? ?? '').trim(),
     difficulty: _normalizeDifficulty(map['difficulty'] as String?),
-    category: InterviewQuestionCategoryX.fromString(
-      map['category'] as String?,
-    ),
+    category: InterviewQuestionCategoryX.fromString(map['category'] as String?),
   );
 
   static String _normalizeDifficulty(String? raw) {
@@ -198,12 +196,10 @@ class JobFitReport {
     atsAnalysis: InterviewPrepAtsAnalysis.fromMap(
       map['atsAnalysis'] as Map<String, dynamic>?,
     ),
-    selectionProbability: (map['selectionProbability'] as String? ?? '')
-        .trim(),
+    selectionProbability: (map['selectionProbability'] as String? ?? '').trim(),
     resumeImprovements: _stringList(map['resumeImprovements']),
     topMissingKeywords: _stringList(map['topMissingKeywords']),
-    finalRecruiterAdvice: (map['finalRecruiterAdvice'] as String? ?? '')
-        .trim(),
+    finalRecruiterAdvice: (map['finalRecruiterAdvice'] as String? ?? '').trim(),
     interviewQuestions: _questionList(map['interviewQuestions']),
   );
 
@@ -263,7 +259,7 @@ class InterviewPrepException implements Exception {
 /// (its own HTTP call + robust JSON extraction) rather than sharing AiService,
 /// which is scoped to the free ATS/job-role-match flows.
 class InterviewPrepService {
-  static const String _model = 'llama-3.3-70b-versatile';
+  static const String _model = 'openai/gpt-oss-120b';
   static const int _maxResumeChars = 12000;
   static const int _maxJdChars = 6000;
   static const int _totalQuestionTarget = 20;
@@ -345,7 +341,9 @@ class InterviewPrepService {
       process: (raw) {
         final list = _questionList(_decode(raw)['interviewQuestions']);
         if (list.isEmpty) {
-          throw const FormatException('No new interview questions were returned.');
+          throw const FormatException(
+            'No new interview questions were returned.',
+          );
         }
         return list;
       },
@@ -435,7 +433,10 @@ OUTPUT FORMAT
     final askedList = alreadyAsked
         .asMap()
         .entries
-        .map((e) => '${e.key + 1}. [${e.value.category.label}] ${e.value.question}')
+        .map(
+          (e) =>
+              '${e.key + 1}. [${e.value.category.label}] ${e.value.question}',
+        )
         .join('\n');
 
     return '''

@@ -1,4 +1,5 @@
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 // import 'package:flutter_riverpod/legacy.dart';
@@ -102,7 +103,8 @@ class AuthState {
     isGoogleLoading: isGoogleLoading ?? this.isGoogleLoading,
     error: error, // explicit null clears previous error
     user: user ?? this.user,
-    referralAttachResult: referralAttachResult, // explicit null clears previous result, same pattern as error
+    referralAttachResult:
+        referralAttachResult, // explicit null clears previous result, same pattern as error
   );
 }
 
@@ -160,7 +162,8 @@ class AuthNotifier extends StateNotifier<AuthState> {
       }
 
       String? attachResult;
-      final codeInvolved = referralCode != null && referralCode.trim().isNotEmpty;
+      final codeInvolved =
+          referralCode != null && referralCode.trim().isNotEmpty;
       if (codeInvolved) {
         final attached = await ReferralService().attachAfterSignup(
           explicitCode: referralCode,
@@ -169,7 +172,11 @@ class AuthNotifier extends StateNotifier<AuthState> {
         attachResult = attached ? 'attached' : 'failed';
       }
 
-      state = state.copyWith(isLoading: false, user: user, referralAttachResult: attachResult);
+      state = state.copyWith(
+        isLoading: false,
+        user: user,
+        referralAttachResult: attachResult,
+      );
       return user;
     } on FirebaseAuthException catch (e) {
       state = state.copyWith(isLoading: false, error: _authError(e.code));
@@ -202,11 +209,34 @@ class AuthNotifier extends StateNotifier<AuthState> {
     state = state.copyWith(isGoogleLoading: true, error: null);
 
     try {
-      final googleProvider = GoogleAuthProvider();
+      final UserCredential userCredential;
 
-      googleProvider.setCustomParameters({'prompt': 'select_account'});
+      if (kIsWeb) {
+        // Web: signInWithPopup drives a JS popup via the Firebase Web SDK
+        // bridge. This call only exists on web — on Android/iOS it throws
+        // "UnimplementedError: signInWithPopup() is only supported on web
+        // based platforms", which is exactly why this was failing on mobile.
+        final googleProvider = GoogleAuthProvider();
+        googleProvider.setCustomParameters({'prompt': 'select_account'});
+        userCredential = await _auth.signInWithPopup(googleProvider);
+      } else {
+        // Android/iOS: drive the native Google account picker via
+        // google_sign_in, then hand the resulting tokens to Firebase.
+        final googleUser = await _googleSignIn.signIn();
 
-      final userCredential = await _auth.signInWithPopup(googleProvider);
+        if (googleUser == null) {
+          // User dismissed the account picker — not an error.
+          state = state.copyWith(isGoogleLoading: false);
+          return null;
+        }
+
+        final googleAuth = await googleUser.authentication;
+        final credential = GoogleAuthProvider.credential(
+          accessToken: googleAuth.accessToken,
+          idToken: googleAuth.idToken,
+        );
+        userCredential = await _auth.signInWithCredential(credential);
+      }
 
       final fbUser = userCredential.user;
 
@@ -241,12 +271,19 @@ class AuthNotifier extends StateNotifier<AuthState> {
         try {
           freshToken = await fbUser.getIdToken();
         } catch (e) {
-          debugPrint('[Auth] Could not get fbUser token for referral attach: $e');
+          debugPrint(
+            '[Auth] Could not get fbUser token for referral attach: $e',
+          );
         }
 
-        final hasExplicitCode = explicitReferralCode != null && explicitReferralCode.trim().isNotEmpty;
-        final pendingCode = hasExplicitCode ? null : await ReferralService().getPendingReferralCode();
-        final codeInvolved = hasExplicitCode || (pendingCode != null && pendingCode.isNotEmpty);
+        final hasExplicitCode =
+            explicitReferralCode != null &&
+            explicitReferralCode.trim().isNotEmpty;
+        final pendingCode = hasExplicitCode
+            ? null
+            : await ReferralService().getPendingReferralCode();
+        final codeInvolved =
+            hasExplicitCode || (pendingCode != null && pendingCode.isNotEmpty);
 
         if (codeInvolved) {
           final attached = await ReferralService().attachAfterSignup(
@@ -257,7 +294,11 @@ class AuthNotifier extends StateNotifier<AuthState> {
         }
       }
 
-      state = state.copyWith(isGoogleLoading: false, user: user, referralAttachResult: referralResult);
+      state = state.copyWith(
+        isGoogleLoading: false,
+        user: user,
+        referralAttachResult: referralResult,
+      );
 
       return user;
     } catch (e, stackTrace) {

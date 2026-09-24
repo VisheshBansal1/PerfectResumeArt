@@ -1,15 +1,4 @@
 // lib/features/resume/screens/guest_preview_screen.dart
-//
-// Uses real PDF/image upload + the SAME canonical AI ATS analysis as the
-// main ATS Checker screen (AiService.analyzeAtsOnly) — guests and signed-in
-// users now always see the same score for the same resume. No Firebase
-// save (guests aren't authenticated).
-//
-// Dependencies already in your pubspec: file_picker, dotted_border, http
-// NEW dependency for drag-and-drop: add to pubspec.yaml
-//   desktop_drop: ^0.4.4
-// then run `flutter pub get`. (cross_file comes with it automatically.)
-// Providers used: aiServiceProvider, ocrServiceProvider (no Firebase auth needed)
 
 import 'dart:io';
 import 'dart:typed_data';
@@ -278,7 +267,9 @@ class _GuestPreviewScreenState extends ConsumerState<GuestPreviewScreen> {
     );
 
     if (model.finalRecommendation == 'Not a Resume') {
-      throw Exception('This doesn\'t look like a resume. Please upload an actual resume/CV file.');
+      throw Exception(
+        'This doesn\'t look like a resume. Please upload an actual resume/CV file.',
+      );
     }
 
     final findings = <String>[
@@ -521,14 +512,18 @@ class _GuestPreviewScreenState extends ConsumerState<GuestPreviewScreen> {
       child: DottedBorder(
         borderType: BorderType.RRect,
         radius: const Radius.circular(12),
-        color: _dragHover ? AppTheme.primary : AppTheme.primary.withOpacity(0.45),
+        color: _dragHover
+            ? AppTheme.primary
+            : AppTheme.primary.withOpacity(0.45),
         strokeWidth: _dragHover ? 2.2 : 1.5,
         dashPattern: const [8, 4],
         child: Container(
           width: double.infinity,
           padding: const EdgeInsets.symmetric(vertical: 32),
           decoration: BoxDecoration(
-            color: _dragHover ? AppTheme.primary.withOpacity(0.08) : AppTheme.primary.withOpacity(0.03),
+            color: _dragHover
+                ? AppTheme.primary.withOpacity(0.08)
+                : AppTheme.primary.withOpacity(0.03),
             borderRadius: BorderRadius.circular(12),
           ),
           child: Column(
@@ -541,7 +536,9 @@ class _GuestPreviewScreenState extends ConsumerState<GuestPreviewScreen> {
                   shape: BoxShape.circle,
                 ),
                 child: Icon(
-                  _dragHover ? Icons.file_download_outlined : Icons.upload_file_outlined,
+                  _dragHover
+                      ? Icons.file_download_outlined
+                      : Icons.upload_file_outlined,
                   size: 28,
                   color: AppTheme.primary,
                 ),
@@ -551,10 +548,13 @@ class _GuestPreviewScreenState extends ConsumerState<GuestPreviewScreen> {
                 _dragHover
                     ? 'Drop to upload'
                     : kIsWeb
-                        ? 'Tap to browse, or drag a file here'
-                        : 'Tap to select your resume',
+                    ? 'Tap to browse, or drag a file here'
+                    : 'Tap to select your resume',
                 textAlign: TextAlign.center,
-                style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 15),
+                style: const TextStyle(
+                  fontWeight: FontWeight.w600,
+                  fontSize: 15,
+                ),
               ),
               const SizedBox(height: 4),
               Text(
@@ -709,42 +709,50 @@ class _GuestPreviewScreenState extends ConsumerState<GuestPreviewScreen> {
                   ),
                 ),
                 const SizedBox(height: 12),
-                // Score + ring visual
-                Stack(
-                  alignment: Alignment.center,
-                  children: [
-                    SizedBox(
-                      width: 110,
-                      height: 110,
-                      child: CircularProgressIndicator(
-                        value: r.atsScore / 100,
-                        strokeWidth: 8,
-                        backgroundColor: Colors.white.withOpacity(0.15),
-                        valueColor: AlwaysStoppedAnimation<Color>(
-                          r.atsScore >= 75
-                              ? const Color(0xFF00C49A)
-                              : Colors.white,
-                        ),
-                      ),
-                    ),
-                    Column(
-                      children: [
-                        Text(
-                          '${r.atsScore}',
-                          style: const TextStyle(
-                            color: Colors.white,
-                            fontSize: 38,
-                            fontWeight: FontWeight.w800,
-                            height: 1,
+                // Score + ring visual — animates in from 0
+                TweenAnimationBuilder<double>(
+                  tween: Tween(begin: 0, end: r.atsScore / 100),
+                  duration: const Duration(milliseconds: 1100),
+                  curve: Curves.easeOutCubic,
+                  builder: (context, value, _) => Stack(
+                    alignment: Alignment.center,
+                    children: [
+                      SizedBox(
+                        width: 110,
+                        height: 110,
+                        child: CircularProgressIndicator(
+                          value: value,
+                          strokeWidth: 8,
+                          backgroundColor: Colors.white.withOpacity(0.15),
+                          valueColor: AlwaysStoppedAnimation<Color>(
+                            r.atsScore >= 75
+                                ? const Color(0xFF00C49A)
+                                : Colors.white,
                           ),
                         ),
-                        const Text(
-                          '/ 100',
-                          style: TextStyle(color: Colors.white54, fontSize: 14),
-                        ),
-                      ],
-                    ),
-                  ],
+                      ),
+                      Column(
+                        children: [
+                          Text(
+                            '${(value * 100).round()}',
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 38,
+                              fontWeight: FontWeight.w800,
+                              height: 1,
+                            ),
+                          ),
+                          const Text(
+                            '/ 100',
+                            style: TextStyle(
+                              color: Colors.white54,
+                              fontSize: 14,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
                 ),
                 const SizedBox(height: 14),
                 // Assessment line
@@ -788,7 +796,7 @@ class _GuestPreviewScreenState extends ConsumerState<GuestPreviewScreen> {
                   vertical: 5,
                 ),
                 decoration: BoxDecoration(
-                  color: Colors.grey[100],
+                  color: AppTheme.subtleFill(context),
                   borderRadius: BorderRadius.circular(20),
                 ),
                 child: Text(
@@ -940,7 +948,7 @@ class _GuestPreviewScreenState extends ConsumerState<GuestPreviewScreen> {
               label: const Text('Try a Different Resume'),
               style: OutlinedButton.styleFrom(
                 foregroundColor: AppTheme.textSecondary,
-                side: BorderSide(color: AppTheme.borderLight),
+                side: BorderSide(color: AppTheme.border(context)),
                 padding: const EdgeInsets.symmetric(vertical: 13),
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(12),
@@ -1024,16 +1032,10 @@ class _FindingTile extends StatelessWidget {
     margin: const EdgeInsets.only(bottom: 10),
     padding: const EdgeInsets.all(14),
     decoration: BoxDecoration(
-      color: Colors.white,
+      color: AppTheme.cardBg(context),
       borderRadius: BorderRadius.circular(12),
-      border: Border.all(color: AppTheme.borderLight),
-      boxShadow: [
-        BoxShadow(
-          color: Colors.black.withOpacity(0.03),
-          blurRadius: 6,
-          offset: const Offset(0, 2),
-        ),
-      ],
+      border: Border.all(color: AppTheme.border(context)),
+      boxShadow: AppTheme.elevation(context, strength: 0.4),
     ),
     child: Row(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -1089,7 +1091,7 @@ class _LockedSection extends StatelessWidget {
   Widget build(BuildContext context) => Container(
     decoration: BoxDecoration(
       borderRadius: BorderRadius.circular(12),
-      border: Border.all(color: AppTheme.borderLight),
+      border: Border.all(color: AppTheme.border(context)),
     ),
     child: Stack(
       children: [
@@ -1122,7 +1124,7 @@ class _LockedSection extends StatelessWidget {
                   margin: const EdgeInsets.only(bottom: 6),
                   height: 12,
                   decoration: BoxDecoration(
-                    color: Colors.grey[200],
+                    color: AppTheme.border(context),
                     borderRadius: BorderRadius.circular(4),
                   ),
                   width: i % 2 == 0 ? double.infinity : 180,

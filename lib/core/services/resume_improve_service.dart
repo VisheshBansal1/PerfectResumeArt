@@ -375,8 +375,8 @@ class ProjectEntry {
 // ─── Service ───────────────────────────────────────────────────────────────────
 
 class ResumeImproveService {
-  static const String _model = 'llama-3.3-70b-versatile';
-  static const String _fastModel = 'llama-3.3-70b-versatile';
+  static const String _model = 'openai/gpt-oss-120b';
+  static const String _fastModel = 'openai/gpt-oss-120b';
 
   // ── 1. Fix My Resume ────────────────────────────────────────────────────────
   Future<ImprovedResume> fixResume({
@@ -1159,7 +1159,12 @@ Return ONLY valid JSON — no markdown, no explanation, no preamble:
     int maxAttempts = 2,
   }) async {
     for (int attempt = 1; attempt <= maxAttempts; attempt++) {
-      final raw = await _call(prompt, maxTokens: maxTokens, model: model, temperature: temperature);
+      final raw = await _call(
+        prompt,
+        maxTokens: maxTokens,
+        model: model,
+        temperature: temperature,
+      );
       try {
         return process(raw);
       } catch (e) {

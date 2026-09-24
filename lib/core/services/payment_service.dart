@@ -1,10 +1,12 @@
 import 'dart:convert';
 import 'dart:async';
 
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 
+import '../widgets/auth_gate.dart';
 import 'app_config.dart';
 import 'auth_token_helper.dart';
 import 'email_service.dart';
@@ -18,9 +20,21 @@ import 'payment_js_bridge.dart'
     if (dart.library.io) 'payment_js_bridge_stub.dart'
     as bridge;
 
+// AdMob rewarded ads — app-only. On web this resolves to a no-op stub, so
+// the "watch an ad" option never appears there and purchase stays the only
+// path (see ad_service_web_stub.dart).
+import 'ad_service.dart' if (dart.library.html) 'ad_service_web_stub.dart';
+
 // ─── Payment Plans ────────────────────────────────────────────────────────────
 
-enum PaymentPlan { fixResume, jdOptimize, bundle, humanReview, resumeGenerator, interviewPrep }
+enum PaymentPlan {
+  fixResume,
+  jdOptimize,
+  bundle,
+  humanReview,
+  resumeGenerator,
+  interviewPrep,
+}
 
 extension PaymentPlanX on PaymentPlan {
   String get title {
@@ -127,9 +141,13 @@ class PricingQuote {
     required this.eligible,
   });
 
-  factory PricingQuote.fromJson(Map<String, dynamic> json, double fallbackAmount) {
+  factory PricingQuote.fromJson(
+    Map<String, dynamic> json,
+    double fallbackAmount,
+  ) {
     return PricingQuote(
-      originalAmount: (json['originalAmount'] as num?)?.toDouble() ?? fallbackAmount,
+      originalAmount:
+          (json['originalAmount'] as num?)?.toDouble() ?? fallbackAmount,
       finalAmount: (json['finalAmount'] as num?)?.toDouble() ?? fallbackAmount,
       discountPercent: json['discountPercent'] as int? ?? 0,
       eligible: json['eligible'] == true,
@@ -144,8 +162,10 @@ class PricingQuote {
     eligible: false,
   );
 
-  String get finalAmountDisplay => '\u20b9${finalAmount.toStringAsFixed(finalAmount.truncateToDouble() == finalAmount ? 0 : 2)}';
-  String get originalAmountDisplay => '\u20b9${originalAmount.toStringAsFixed(originalAmount.truncateToDouble() == originalAmount ? 0 : 2)}';
+  String get finalAmountDisplay =>
+      '\u20b9${finalAmount.toStringAsFixed(finalAmount.truncateToDouble() == finalAmount ? 0 : 2)}';
+  String get originalAmountDisplay =>
+      '\u20b9${originalAmount.toStringAsFixed(originalAmount.truncateToDouble() == originalAmount ? 0 : 2)}';
 }
 
 // ─── Payment Result ───────────────────────────────────────────────────────────
@@ -162,6 +182,19 @@ class PaymentResult {
     this.error,
   });
 }
+
+// ─── Paywall Outcome ──────────────────────────────────────────────────────────
+// What PaywallSheet.show(...) resolved to. Callers must branch on this
+// instead of a plain bool so a genuine (persisted, forever) purchase is
+// never confused with a one-time rewarded-ad unlock:
+//   • purchased  → persist the unlock in Firestore via unlockProvider, same
+//                  as before.
+//   • watchedAd  → grant this ONE use of the feature only (a local/session
+//                  flag in the calling screen) — never write it to
+//                  Firestore or the unlockProvider, or it would silently
+//                  become a permanent free unlock.
+//   • cancelled  → user backed out (or isn't signed in) — do nothing.
+enum PaywallResult { cancelled, purchased, watchedAd }
 
 // ─── Payment Service ──────────────────────────────────────────────────────────
 
@@ -180,7 +213,9 @@ class PaymentService {
       final token = await getIdTokenSafely();
       if (token != null) headers['Authorization'] = 'Bearer $token';
     } catch (e) {
-      debugPrint('[PAY] Could not attach auth token (continuing without it): $e');
+      debugPrint(
+        '[PAY] Could not attach auth token (continuing without it): $e',
+      );
     }
     return headers;
   }
@@ -497,21 +532,46 @@ class PaywallSheet extends StatefulWidget {
   final String userName;
   final VoidCallback onSuccess;
 
+  /// Whether the "watch an ad instead" option is offered for this plan.
+  /// Defaults to true. Set to false for plans that shouldn't be given away
+  /// for one ad view — e.g. PaymentPlan.humanReview (a real person does
+  /// manual work to fulfill it) or PaymentPlan.bundle (permanently unlocks
+  /// every paid feature at once, including human review).
+  final bool allowAdUnlock;
+
   const PaywallSheet({
     super.key,
     required this.plan,
     required this.userEmail,
     required this.userName,
     required this.onSuccess,
+    this.allowAdUnlock = true,
   });
 
-  static Future<bool> show(
+  static Future<PaywallResult> show(
     BuildContext context, {
     required PaymentPlan plan,
     required String userEmail,
     required String userName,
+    bool allowAdUnlock = true,
   }) async {
-    final result = await showModalBottomSheet<bool>(
+    // Hard gate on the payment entry point itself — not at each call site.
+    // Every "Unlock"/"Buy" button across every premium screen calls this
+    // one static method, so checking here means neither a purchase nor a
+    // rewarded-ad unlock can start without a signed-in user, regardless of
+    // which screen (existing or future) triggers it.
+    if (FirebaseAuth.instance.currentUser == null) {
+      if (!context.mounted) return PaywallResult.cancelled;
+      await showModalBottomSheet<void>(
+        context: context,
+        isScrollControlled: true,
+        backgroundColor: Colors.transparent,
+        builder: (_) => SignInRequiredSheet(feature: plan.title),
+      );
+      return PaywallResult.cancelled;
+    }
+
+    final result = await showModalBottomSheet<PaywallResult>(
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
@@ -519,10 +579,11 @@ class PaywallSheet extends StatefulWidget {
         plan: plan,
         userEmail: userEmail,
         userName: userName,
-        onSuccess: () => Navigator.of(context).pop(true),
+        allowAdUnlock: allowAdUnlock,
+        onSuccess: () => Navigator.of(context).pop(PaywallResult.purchased),
       ),
     );
-    return result ?? false;
+    return result ?? PaywallResult.cancelled;
   }
 
   @override
@@ -532,14 +593,48 @@ class PaywallSheet extends StatefulWidget {
 class _PaywallSheetState extends State<PaywallSheet> {
   final _paymentService = PaymentService();
   bool _loading = false;
+  bool _adLoading = false;
   String? _error;
 
   PricingQuote? _quote;
+
+  // Only offered on app builds — AdService.isSupported is false on web.
+  bool get _showAdOption => widget.allowAdUnlock && AdService.isSupported;
 
   @override
   void initState() {
     super.initState();
     _loadQuote();
+    // Warm up a rewarded ad the moment the sheet opens so it's ready by the
+    // time the user taps the button.
+    if (_showAdOption) AdService.instance.loadRewardedAd();
+  }
+
+  Future<void> _watchAd() async {
+    setState(() {
+      _adLoading = true;
+      _error = null;
+    });
+    try {
+      final earned = await AdService.instance.showRewardedAd();
+      if (!mounted) return;
+      setState(() => _adLoading = false);
+      if (earned) {
+        Navigator.of(context).pop(PaywallResult.watchedAd);
+      } else {
+        setState(
+          () => _error =
+              'Ad not available right now. Please try again in a moment, '
+              'or unlock with payment instead.',
+        );
+      }
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _adLoading = false;
+        _error = 'Could not show ad: $e';
+      });
+    }
   }
 
   Future<void> _loadQuote() async {
@@ -768,10 +863,69 @@ class _PaywallSheetState extends State<PaywallSheet> {
               textAlign: TextAlign.center,
               style: TextStyle(fontSize: 11),
             ),
+            if (_showAdOption) ..._buildAdOption(),
           ],
         ),
       ),
     );
+  }
+
+  // ── "Or watch an ad instead" ────────────────────────────────────────────
+  // App-only free alternative to paying. Grants this ONE use of the
+  // feature, not a permanent unlock — see PaywallResult docs.
+  List<Widget> _buildAdOption() {
+    return [
+      const SizedBox(height: 18),
+      Row(
+        children: [
+          Expanded(child: Divider(color: Colors.grey[300])),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 10),
+            child: Text(
+              'OR',
+              style: TextStyle(
+                fontSize: 11,
+                color: Colors.grey[500],
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+          ),
+          Expanded(child: Divider(color: Colors.grey[300])),
+        ],
+      ),
+      const SizedBox(height: 14),
+      SizedBox(
+        width: double.infinity,
+        height: 50,
+        child: OutlinedButton.icon(
+          onPressed: (_loading || _adLoading) ? null : _watchAd,
+          icon: _adLoading
+              ? const SizedBox(
+                  width: 18,
+                  height: 18,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                )
+              : const Icon(Icons.play_circle_outline_rounded, size: 20),
+          label: Text(
+            _adLoading ? 'Loading ad…' : 'Watch an ad to use this — free',
+            style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700),
+          ),
+          style: OutlinedButton.styleFrom(
+            foregroundColor: const Color(0xFF2D5BE3),
+            side: const BorderSide(color: Color(0xFF2D5BE3), width: 1.5),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(12),
+            ),
+          ),
+        ),
+      ),
+      const SizedBox(height: 8),
+      Text(
+        'Free one-time use of this feature · No account or purchase needed',
+        textAlign: TextAlign.center,
+        style: TextStyle(fontSize: 11, color: Colors.grey[600]),
+      ),
+    ];
   }
 
   // Referral Program — shows Original Price / Discount / Final Price with a
@@ -836,7 +990,10 @@ class _PaywallSheetState extends State<PaywallSheet> {
               ),
               Text(
                 quote.finalAmountDisplay,
-                style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w800),
+                style: const TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.w800,
+                ),
               ),
             ],
           ),

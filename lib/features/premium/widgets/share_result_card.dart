@@ -4,8 +4,12 @@ import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../core/constants/app_constants.dart';
 import '../../../core/constants/app_theme.dart';
+import '../../../core/services/referral_service.dart';
+import '../../auth/providers/auth_provider.dart';
 
 /// Displays a tappable "Share your result" banner.
 /// When tapped, shows a full-screen shareable card the user can screenshot.
@@ -17,7 +21,7 @@ import '../../../core/constants/app_theme.dart';
 ///     scoreAfter: 78,
 ///     highlight: 'Bullets rewritten with impact metrics',
 ///   )
-class ShareResultBanner extends StatelessWidget {
+class ShareResultBanner extends ConsumerWidget {
   final String toolName;
   final int scoreBefore;
   final int scoreAfter;
@@ -32,9 +36,10 @@ class ShareResultBanner extends StatelessWidget {
   });
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final referralCode = ref.watch(currentUserProvider).value?.referralCode;
     return GestureDetector(
-      onTap: () => _showShareCard(context),
+      onTap: () => _showShareCard(context, referralCode),
       child: Container(
         margin: const EdgeInsets.symmetric(vertical: 8),
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
@@ -75,7 +80,7 @@ class ShareResultBanner extends StatelessWidget {
     );
   }
 
-  void _showShareCard(BuildContext context) {
+  void _showShareCard(BuildContext context, String? referralCode) {
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
@@ -85,6 +90,7 @@ class ShareResultBanner extends StatelessWidget {
         scoreBefore: scoreBefore,
         scoreAfter: scoreAfter,
         highlight: highlight,
+        referralCode: referralCode,
       ),
     );
   }
@@ -96,12 +102,14 @@ class _ShareCardSheet extends StatefulWidget {
   final int scoreBefore;
   final int scoreAfter;
   final String highlight;
+  final String? referralCode;
 
   const _ShareCardSheet({
     required this.toolName,
     required this.scoreBefore,
     required this.scoreAfter,
     required this.highlight,
+    required this.referralCode,
   });
 
   @override
@@ -203,13 +211,22 @@ class _ShareCardSheetState extends State<_ShareCardSheet> {
 
   void _copyShareText() {
     final improvement = widget.scoreAfter - widget.scoreBefore;
-    final text =
-        '🚀 Just improved my resume score from ${widget.scoreBefore}% to ${widget.scoreAfter}% '
-        '(+$improvement%) using AI!\n\n'
-        '✅ ${widget.highlight}\n\n'
-        'Used "${widget.toolName}" on Perfect Resume Art app 🔥\n'
-        '#Resume #JobHunt #CareerTips';
-    Clipboard.setData(ClipboardData(text: text));
+    final code = widget.referralCode;
+    final buffer = StringBuffer(
+      '🚀 Just improved my resume score from ${widget.scoreBefore}% to ${widget.scoreAfter}% '
+      '(+$improvement%) using AI!\n\n'
+      '✅ ${widget.highlight}\n\n'
+      'Used "${widget.toolName}" on Perfect Resume Art app 🔥\n',
+    );
+    if (code != null && code.isNotEmpty) {
+      buffer.write(
+        '\nWant to try it? Use my code $code and get '
+        '${AppConstants.defaultReferralDiscountPercent}% off your first premium purchase 🎉\n'
+        '${ReferralService().referralLink(code)}\n',
+      );
+    }
+    buffer.write('#Resume #JobHunt #CareerTips');
+    Clipboard.setData(ClipboardData(text: buffer.toString()));
     setState(() => _copied = true);
     Future.delayed(const Duration(seconds: 2), () {
       if (mounted) setState(() => _copied = false);

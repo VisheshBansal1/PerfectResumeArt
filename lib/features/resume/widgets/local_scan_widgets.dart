@@ -7,7 +7,8 @@ import '../../../core/services/local_resume_analyzer.dart';
 /// same number always reads the same way.
 Color scanScoreColor(int score) {
   if (score >= 85) return AppTheme.success;
-  if (score >= 70) return const Color(0xFF7CB342); // yellow-green: good, not perfect
+  if (score >= 70)
+    return const Color(0xFF7CB342); // yellow-green: good, not perfect
   if (score >= 50) return AppTheme.warning;
   return AppTheme.error;
 }
@@ -40,7 +41,12 @@ class ScoreRing extends StatelessWidget {
   final double size;
   final String? caption;
 
-  const ScoreRing({super.key, required this.score, this.size = 96, this.caption});
+  const ScoreRing({
+    super.key,
+    required this.score,
+    this.size = 96,
+    this.caption,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -51,49 +57,58 @@ class ScoreRing extends StatelessWidget {
         SizedBox(
           width: size,
           height: size,
-          child: Stack(
-            alignment: Alignment.center,
-            children: [
-              SizedBox(
-                width: size,
-                height: size,
-                child: CircularProgressIndicator(
-                  value: score / 100,
-                  strokeWidth: size * 0.09,
-                  backgroundColor: color.withOpacity(0.12),
-                  valueColor: AlwaysStoppedAnimation(color),
-                  strokeCap: StrokeCap.round,
+          child: TweenAnimationBuilder<double>(
+            tween: Tween(begin: 0, end: score / 100),
+            duration: const Duration(milliseconds: 1100),
+            curve: Curves.easeOutCubic,
+            builder: (context, value, _) => Stack(
+              alignment: Alignment.center,
+              children: [
+                SizedBox(
+                  width: size,
+                  height: size,
+                  child: CircularProgressIndicator(
+                    value: value,
+                    strokeWidth: size * 0.09,
+                    backgroundColor: color.withOpacity(0.12),
+                    valueColor: AlwaysStoppedAnimation(color),
+                    strokeCap: StrokeCap.round,
+                  ),
                 ),
-              ),
-              Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Text(
-                    '$score',
-                    style: TextStyle(
-                      fontSize: size * 0.30,
-                      fontWeight: FontWeight.w800,
-                      color: color,
+                Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      '${(value * 100).round()}',
+                      style: TextStyle(
+                        fontSize: size * 0.30,
+                        fontWeight: FontWeight.w800,
+                        color: color,
+                      ),
                     ),
-                  ),
-                  Text(
-                    '/ 100',
-                    style: TextStyle(
-                      fontSize: size * 0.11,
-                      color: AppTheme.textSecondary,
-                      fontWeight: FontWeight.w600,
+                    Text(
+                      '/ 100',
+                      style: TextStyle(
+                        fontSize: size * 0.11,
+                        color: AppTheme.textSecondary,
+                        fontWeight: FontWeight.w600,
+                      ),
                     ),
-                  ),
-                ],
-              ),
-            ],
+                  ],
+                ),
+              ],
+            ),
           ),
         ),
         if (caption != null) ...[
           const SizedBox(height: 8),
           Text(
             caption!,
-            style: TextStyle(fontSize: 12, color: AppTheme.textSecondary, fontWeight: FontWeight.w600),
+            style: TextStyle(
+              fontSize: 12,
+              color: AppTheme.textSecondary,
+              fontWeight: FontWeight.w600,
+            ),
           ),
         ],
       ],
@@ -109,7 +124,9 @@ class CategoryScoreBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final pct = category.maxScore == 0 ? 0.0 : category.score / category.maxScore;
+    final pct = category.maxScore == 0
+        ? 0.0
+        : category.score / category.maxScore;
     final color = scanScoreColor((pct * 100).round());
     return Padding(
       padding: const EdgeInsets.only(bottom: 10),
@@ -121,22 +138,34 @@ class CategoryScoreBar extends StatelessWidget {
             children: [
               Text(
                 category.name,
-                style: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.w600),
+                style: const TextStyle(
+                  fontSize: 12.5,
+                  fontWeight: FontWeight.w600,
+                ),
               ),
               Text(
                 '${category.score}/${category.maxScore}',
-                style: TextStyle(fontSize: 12, color: AppTheme.textSecondary, fontWeight: FontWeight.w600),
+                style: TextStyle(
+                  fontSize: 12,
+                  color: AppTheme.textSecondary,
+                  fontWeight: FontWeight.w600,
+                ),
               ),
             ],
           ),
           const SizedBox(height: 5),
           ClipRRect(
             borderRadius: BorderRadius.circular(6),
-            child: LinearProgressIndicator(
-              value: pct.clamp(0, 1),
-              minHeight: 7,
-              backgroundColor: color.withOpacity(0.12),
-              valueColor: AlwaysStoppedAnimation(color),
+            child: TweenAnimationBuilder<double>(
+              tween: Tween(begin: 0, end: pct.clamp(0, 1)),
+              duration: const Duration(milliseconds: 900),
+              curve: Curves.easeOutCubic,
+              builder: (context, value, _) => LinearProgressIndicator(
+                value: value,
+                minHeight: 7,
+                backgroundColor: color.withOpacity(0.12),
+                valueColor: AlwaysStoppedAnimation(color),
+              ),
             ),
           ),
         ],
@@ -167,12 +196,19 @@ class ScanCheckTile extends StatelessWidget {
               children: [
                 Text(
                   check.title,
-                  style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13),
+                  style: const TextStyle(
+                    fontWeight: FontWeight.w600,
+                    fontSize: 13,
+                  ),
                 ),
                 const SizedBox(height: 2),
                 Text(
                   check.message,
-                  style: TextStyle(fontSize: 12, color: AppTheme.textSecondary, height: 1.4),
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: AppTheme.textSecondary,
+                    height: 1.4,
+                  ),
                 ),
               ],
             ),
@@ -238,9 +274,9 @@ class _WhatAtsSeesCardState extends State<WhatAtsSeesCard> {
   Widget build(BuildContext context) {
     return Container(
       decoration: BoxDecoration(
-        color: AppTheme.textPrimary.withOpacity(0.03),
+        color: AppTheme.subtleFill(context),
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: AppTheme.borderLight),
+        border: Border.all(color: AppTheme.border(context)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -252,16 +288,25 @@ class _WhatAtsSeesCardState extends State<WhatAtsSeesCard> {
               padding: const EdgeInsets.all(14),
               child: Row(
                 children: [
-                  const Icon(Icons.visibility_outlined, size: 18, color: Colors.purple),
+                  const Icon(
+                    Icons.visibility_outlined,
+                    size: 18,
+                    color: Colors.purple,
+                  ),
                   const SizedBox(width: 8),
                   const Expanded(
                     child: Text(
                       'What your ATS actually sees',
-                      style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13),
+                      style: TextStyle(
+                        fontWeight: FontWeight.w600,
+                        fontSize: 13,
+                      ),
                     ),
                   ),
                   Icon(
-                    _expanded ? Icons.keyboard_arrow_up : Icons.keyboard_arrow_down,
+                    _expanded
+                        ? Icons.keyboard_arrow_up
+                        : Icons.keyboard_arrow_down,
                     color: AppTheme.textSecondary,
                   ),
                 ],
@@ -278,7 +323,11 @@ class _WhatAtsSeesCardState extends State<WhatAtsSeesCard> {
                     'This is the raw text pulled from your file — the same thing an ATS parser reads. '
                     'If anything below looks jumbled, out of order, or missing, a real ATS will have the '
                     'same trouble with it.',
-                    style: TextStyle(fontSize: 11.5, color: AppTheme.textSecondary, height: 1.4),
+                    style: TextStyle(
+                      fontSize: 11.5,
+                      color: AppTheme.textSecondary,
+                      height: 1.4,
+                    ),
                   ),
                   const SizedBox(height: 10),
                   Container(
@@ -289,7 +338,9 @@ class _WhatAtsSeesCardState extends State<WhatAtsSeesCard> {
                       borderRadius: BorderRadius.circular(8),
                     ),
                     child: Text(
-                      widget.text.isEmpty ? '(No text extracted yet)' : widget.text,
+                      widget.text.isEmpty
+                          ? '(No text extracted yet)'
+                          : widget.text,
                       style: const TextStyle(
                         fontFamily: 'monospace',
                         fontSize: 11.5,
@@ -314,13 +365,24 @@ class ScanTallyPill extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     Widget dot(Color c, int n, String label) => Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Container(width: 7, height: 7, decoration: BoxDecoration(color: c, shape: BoxShape.circle)),
-            const SizedBox(width: 5),
-            Text('$n $label', style: TextStyle(fontSize: 11.5, color: AppTheme.textSecondary, fontWeight: FontWeight.w600)),
-          ],
-        );
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Container(
+          width: 7,
+          height: 7,
+          decoration: BoxDecoration(color: c, shape: BoxShape.circle),
+        ),
+        const SizedBox(width: 5),
+        Text(
+          '$n $label',
+          style: TextStyle(
+            fontSize: 11.5,
+            color: AppTheme.textSecondary,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+      ],
+    );
 
     return Wrap(
       spacing: 14,
@@ -342,7 +404,11 @@ class LocalScanReport extends StatelessWidget {
   final LocalScanResult result;
   final bool showRawTextPreview;
 
-  const LocalScanReport({super.key, required this.result, this.showRawTextPreview = true});
+  const LocalScanReport({
+    super.key,
+    required this.result,
+    this.showRawTextPreview = true,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -361,7 +427,11 @@ class LocalScanReport extends StatelessWidget {
             children: [
               Row(
                 children: [
-                  ScoreRing(score: result.score, size: 84, caption: result.scoreLabel),
+                  ScoreRing(
+                    score: result.score,
+                    size: 84,
+                    caption: result.scoreLabel,
+                  ),
                   const SizedBox(width: 18),
                   Expanded(
                     child: Column(
@@ -369,12 +439,18 @@ class LocalScanReport extends StatelessWidget {
                       children: [
                         const Text(
                           'Instant Health Scan',
-                          style: TextStyle(fontWeight: FontWeight.w700, fontSize: 14),
+                          style: TextStyle(
+                            fontWeight: FontWeight.w700,
+                            fontSize: 14,
+                          ),
                         ),
                         const SizedBox(height: 3),
                         Text(
                           'Free, on-device pre-check — no AI call, no waiting.',
-                          style: TextStyle(fontSize: 11.5, color: AppTheme.textSecondary),
+                          style: TextStyle(
+                            fontSize: 11.5,
+                            color: AppTheme.textSecondary,
+                          ),
                         ),
                         const SizedBox(height: 10),
                         ScanTallyPill(result: result),
@@ -395,12 +471,20 @@ class LocalScanReport extends StatelessWidget {
                   child: Row(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      const Icon(Icons.priority_high, color: AppTheme.error, size: 16),
+                      const Icon(
+                        Icons.priority_high,
+                        color: AppTheme.error,
+                        size: 16,
+                      ),
                       const SizedBox(width: 8),
                       Expanded(
                         child: Text(
                           result.capReason!,
-                          style: const TextStyle(fontSize: 11.5, color: AppTheme.error, height: 1.4),
+                          style: const TextStyle(
+                            fontSize: 11.5,
+                            color: AppTheme.error,
+                            height: 1.4,
+                          ),
                         ),
                       ),
                     ],
@@ -411,11 +495,17 @@ class LocalScanReport extends StatelessWidget {
           ),
         ),
         const SizedBox(height: 18),
-        const Text('Score breakdown', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700)),
+        const Text(
+          'Score breakdown',
+          style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700),
+        ),
         const SizedBox(height: 12),
         ...result.categories.map((c) => CategoryScoreBar(category: c)),
         const SizedBox(height: 8),
-        const Text('Detailed findings', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700)),
+        const Text(
+          'Detailed findings',
+          style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700),
+        ),
         const SizedBox(height: 12),
         ScanCheckList(checks: result.checks),
         if (showRawTextPreview) ...[
